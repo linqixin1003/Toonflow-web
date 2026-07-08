@@ -686,6 +686,7 @@
       "generateImage": "Generate ASO image",
       "generateFailed": "Generation failed",
       "duplicateGenerating": "This plan is already generating — please wait",
+      "plansDuplicateGenerating": "Plan generation is already in progress — please wait",
       "visionFallback": "asoVisionAi is not configured; plans were generated in text-only mode without image understanding",
       "imageDone": "ASO image ready",
       "materialsTitle": "Materials",

@@ -87,7 +87,7 @@ async function onGenerateImage(plan: any) {
     pollUntilDone(projectId, data.imageId, plan.id);
   } catch (e: any) {
     const msg = e?.message || $t("workbench.aso.generateFailed");
-    window.$message.error(msg.includes("正在生成") ? $t("workbench.aso.duplicateGenerating") : msg);
+    window.$message.error(e?.code === 409 ? $t("workbench.aso.duplicateGenerating") : msg);
     generatingPlanId.value = null;
   }
 }

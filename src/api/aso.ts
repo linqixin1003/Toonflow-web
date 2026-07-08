@@ -68,7 +68,18 @@ export async function generatePlansStream(
     body: JSON.stringify({ projectId, inputText, planCount, assetIds }),
   });
 
-  if (!res.ok || !res.body) {
+  if (!res.ok) {
+    let body: { message?: string; code?: number } = {};
+    try {
+      body = await res.json();
+    } catch {
+      /* ignore */
+    }
+    const err = new Error(body.message || "流式连接失败") as Error & { code?: number };
+    err.code = body.code ?? res.status;
+    throw err;
+  }
+  if (!res.body) {
     throw new Error("流式连接失败");
   }
 
@@ -102,8 +113,16 @@ export async function generatePlansStream(
           visionFallback: data.visionFallback ?? false,
         };
       }
-      if (event === "error") throw new Error(data.message || "生成失败");
+      if (event === "error") {
+        const err = new Error(data.message || "生成失败") as Error & { code?: number };
+        err.code = data.code;
+        throw err;
+      }
     }
+  }
+
+  if (!result.workspace) {
+    throw new Error("生成未完成");
   }
 
   return result;

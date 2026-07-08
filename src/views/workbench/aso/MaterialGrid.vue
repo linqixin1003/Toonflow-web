@@ -177,7 +177,7 @@ async function submitVariants() {
     return true;
   } catch (e: any) {
     window.$message.error(
-      e?.message?.includes("变体") ? $t("workbench.aso.variantDuplicateGenerating") : e?.message || $t("workbench.aso.generateFailed"),
+      e?.code === 409 ? $t("workbench.aso.variantDuplicateGenerating") : e?.message || $t("workbench.aso.generateFailed"),
     );
     return false;
   } finally {

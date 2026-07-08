@@ -68,7 +68,11 @@ instance.interceptors.response.use(
       });
     }
 
-    return Promise.reject(error?.response?.data ?? error);
+    const data = error?.response?.data;
+    if (data && typeof data === "object" && error?.response?.status && data.code == null) {
+      (data as { code?: number }).code = error.response.status;
+    }
+    return Promise.reject(data ?? error);
   },
 );
 

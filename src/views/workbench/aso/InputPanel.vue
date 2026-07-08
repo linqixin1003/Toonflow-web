@@ -57,7 +57,9 @@ async function onGenerate() {
     }
     window.$message.success($t("workbench.aso.plansGenerated"));
   } catch (e: any) {
-    window.$message.error(e?.message || $t("workbench.aso.generateFailed"));
+    window.$message.error(
+      e?.code === 409 ? $t("workbench.aso.plansDuplicateGenerating") : e?.message || $t("workbench.aso.generateFailed"),
+    );
   }
 }
 </script>

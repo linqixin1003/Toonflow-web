@@ -32,8 +32,9 @@ export function useAsoPlanStream() {
         },
       );
     } catch (e: unknown) {
+      const code = (e as { code?: number })?.code;
       const msg = e instanceof Error ? e.message : String(e);
-      if (!STREAM_FALLBACK_ERRORS.test(msg)) {
+      if (code === 409 || !STREAM_FALLBACK_ERRORS.test(msg)) {
         errorMessage.value = msg;
         throw e;
       }

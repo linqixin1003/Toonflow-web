@@ -781,6 +781,7 @@
       "generateImage": "生成 ASO 图",
       "generateFailed": "生成失败",
       "duplicateGenerating": "该方案正在生成中，请稍候",
+      "plansDuplicateGenerating": "创意方案正在生成中，请稍候",
       "visionFallback": "未配置 ASO 图片理解（asoVisionAi），已用文字模式生成，识图效果可能下降",
       "imageDone": "ASO 图生成完成",
       "materialsTitle": "素材",
