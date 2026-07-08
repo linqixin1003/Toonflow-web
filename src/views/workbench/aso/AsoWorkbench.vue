@@ -45,6 +45,7 @@
             </t-button>
           </t-tooltip>
           <span class="flowHint">{{ $t("workbench.aso.flowHint") }}</span>
+          <t-tag v-if="plans.length" size="small" variant="light">{{ $t("workbench.aso.plansCountBadge", { count: plans.length }) }}</t-tag>
         </div>
         <t-tooltip v-if="!inspectorVisible" :content="$t('workbench.aso.showInspector')" placement="left">
           <div class="openInspectorBtn c" @click.stop="inspectorVisible = true">
@@ -89,16 +90,17 @@ import AsoMaterialsNode from "./node/AsoMaterialsNode.vue";
 import AsoPlanItemNode from "./node/AsoPlanItemNode.vue";
 import AsoOutputItemNode from "./node/AsoOutputItemNode.vue";
 import AsoInspector from "./AsoInspector.vue";
-import { ASO_WORKBENCH_KEY } from "./asoContext";
+import { ASO_WORKBENCH_KEY, type LoadWorkspaceOptions } from "./asoContext";
 import {
   ASO_NODE_IDS,
   DEFAULT_ASO_NODE_POSITIONS,
   planNodeId,
   outputNodeId,
+  resolveOutputPlanId,
   useAsoFlowBuilder,
   type AsoNodePositions,
 } from "./utils/asoFlowBuilder";
-import { getWorkspace, pollingOutputs, saveWorkspace, generateAsoImage } from "@/api/aso";
+import { getWorkspace, pollingOutputs, saveWorkspace, generateAsoImage, deleteOutput } from "@/api/aso";
 import projectStore from "@/stores/project";
 import settingStore from "@/stores/setting";
 
@@ -126,6 +128,7 @@ const selectedPlanId = ref<string | null>(null);
 const selectedOutputId = ref<number | null>(null);
 const referencedAssetIds = ref<number[]>([]);
 const outputSizePreset = ref("general_vertical_1080x1920");
+const planCount = ref(1);
 const generatingPlanId = ref<string | null>(null);
 const inspectorVisible = useLocalStorage("aso_inspector_visible", true);
 
@@ -137,6 +140,7 @@ let dragOrigin = { x: 0, y: 0, vx: 0, vy: 0 };
 let savePosTimer: ReturnType<typeof setTimeout> | null = null;
 let outputPollTimer: ReturnType<typeof setInterval> | null = null;
 let remeasureTimer: ReturnType<typeof setTimeout> | null = null;
+let loadRequestId = 0;
 
 function onSpaceMouseDown(e: MouseEvent) {
   if (!isSpacePressed.value || e.button !== 0) return;
@@ -253,7 +257,7 @@ function positionOutputNearPlan(planId: string, imageId: number) {
   const oid = outputNodeId(imageId);
   if (nodePositions.value[oid]) return;
   const planPos = nodePositions.value[pid] ?? { x: 420, y: 0 };
-  const siblings = outputs.value.filter((o) => o.planId === planId);
+  const siblings = outputs.value.filter((o) => resolveOutputPlanId(o, plans.value) === planId);
   const idx = siblings.findIndex((o) => o.imageId === imageId);
   nodePositions.value[oid] = {
     x: planPos.x + 420,
@@ -321,19 +325,55 @@ watch(outputs, scheduleOutputPoll, { deep: true });
 watch(() => plans.value.length, scheduleRemeasure);
 watch(() => outputs.value.length, scheduleRemeasure);
 
-async function generatePlanImage(planId: string) {
+async function generatePlanImage(planId: string, presetId?: string) {
   if (!project.value?.id || generatingPlanId.value) return;
   const projectId = Number(project.value.id);
   generatingPlanId.value = planId;
   try {
-    const { data } = await generateAsoImage(projectId, planId, outputSizePreset.value, referencedAssetIds.value);
-    await loadWorkspace();
+    const { data } = await generateAsoImage(
+      projectId,
+      planId,
+      presetId ?? outputSizePreset.value,
+      referencedAssetIds.value,
+    );
+    await refreshOutputsFromServer();
     positionOutputNearPlan(planId, data.imageId);
     scheduleRemeasure();
   } catch (e: any) {
     const msg = e?.message || $t("workbench.aso.generateFailed");
     window.$message.error(e?.code === 409 ? $t("workbench.aso.duplicateGenerating") : msg);
     generatingPlanId.value = null;
+  }
+}
+
+async function deleteOutputItem(imageId: number) {
+  if (!project.value?.id) return;
+  try {
+    await deleteOutput(Number(project.value.id), imageId);
+    outputs.value = outputs.value.filter((o) => o.imageId !== imageId);
+    if (selectedOutputId.value === imageId) selectedOutputId.value = null;
+    delete nodePositions.value[outputNodeId(imageId)];
+    pruneNodePositions();
+    scheduleSavePositions();
+    scheduleRemeasure();
+    window.$message.success($t("workbench.aso.outputDeleted"));
+  } catch (e: any) {
+    window.$message.error(e?.message || $t("workbench.aso.deleteFailed"));
+  }
+}
+
+async function regenerateOutput(output: any) {
+  const planId = resolveOutputPlanId(output, plans.value);
+  if (!planId) {
+    window.$message.error($t("workbench.aso.outputPlanMissing"));
+    return;
+  }
+  if (generatingPlanId.value) return;
+  try {
+    await deleteOutputItem(output.imageId);
+    await generatePlanImage(planId, output.presetId);
+  } catch {
+    /* errors surfaced in helpers */
   }
 }
 
@@ -346,26 +386,82 @@ function applySavedLayout(saved: Record<string, { x: number; y: number }> | unde
 
 function needsPerItemLayout(): boolean {
   if (plans.value.some((p) => !nodePositions.value[planNodeId(p.id)])) return true;
-  return outputs.value.some((o) => !nodePositions.value[outputNodeId(o.imageId)]);
+  if (outputs.value.some((o) => !nodePositions.value[outputNodeId(o.imageId)])) return true;
+  const planPosKeys = plans.value
+    .map((p) => nodePositions.value[planNodeId(p.id)])
+    .filter(Boolean)
+    .map((p) => `${p!.x},${p!.y}`);
+  if (planPosKeys.length >= 2 && new Set(planPosKeys).size < planPosKeys.length) return true;
+  return false;
 }
 
-async function loadWorkspace(): Promise<boolean> {
+function applyWorkspaceData(
+  workspace: any,
+  options: Required<LoadWorkspaceOptions>,
+): boolean {
+  if (options.meta) {
+    selectedPlanId.value = workspace?.selectedPlanId ?? null;
+    referencedAssetIds.value = workspace?.referencedAssetIds ?? [];
+    outputSizePreset.value = workspace?.outputSizePreset ?? "general_vertical_1080x1920";
+    if (workspace?.planCount) planCount.value = workspace.planCount;
+  }
+  if (options.plans) {
+    const serverPlans = workspace?.plans ?? [];
+    if (serverPlans.length > 0 || plans.value.length === 0) {
+      plans.value = serverPlans;
+    }
+  }
+  if (options.outputs) {
+    outputs.value = workspace?.outputs ?? outputs.value;
+  }
+  if (options.layout) {
+    return applySavedLayout(workspace?.nodePositions);
+  }
+  return false;
+}
+
+async function loadWorkspace(options: LoadWorkspaceOptions = {}): Promise<boolean> {
+  const opts: Required<LoadWorkspaceOptions> = {
+    plans: options.plans ?? true,
+    outputs: options.outputs ?? true,
+    layout: options.layout ?? true,
+    meta: options.meta ?? true,
+  };
   if (!project.value?.id) return false;
+  const requestId = ++loadRequestId;
   const { data } = await getWorkspace(Number(project.value.id));
-  plans.value = data.workspace?.plans ?? [];
-  outputs.value = await enrichOutputs(data.workspace?.outputs ?? []);
-  selectedPlanId.value = data.workspace?.selectedPlanId ?? null;
-  referencedAssetIds.value = data.workspace?.referencedAssetIds ?? [];
-  outputSizePreset.value = data.workspace?.outputSizePreset ?? "general_vertical_1080x1920";
-  const saved = data.workspace?.nodePositions;
-  return applySavedLayout(saved);
+  if (requestId !== loadRequestId) return false;
+
+  let hadSavedLayout = false;
+  if (opts.outputs) {
+    outputs.value = await enrichOutputs(data.workspace?.outputs ?? []);
+    if (requestId !== loadRequestId) return false;
+  } else {
+    return applyWorkspaceData(data.workspace, opts);
+  }
+
+  return applyWorkspaceData(data.workspace, { ...opts, outputs: false });
+}
+
+async function refreshOutputsFromServer() {
+  await loadWorkspace({ plans: false, layout: false, meta: false, outputs: true });
+  scheduleRemeasure();
 }
 
 async function onPlansGenerated(payload: { plans: any[]; workspace?: any }) {
-  plans.value = payload.plans ?? payload.workspace?.plans ?? [];
+  const serverPlans = payload.workspace?.plans ?? payload.plans ?? [];
+  if (serverPlans.length) {
+    plans.value = serverPlans;
+  } else if (payload.plans?.length) {
+    plans.value = payload.plans;
+  }
   if (payload.workspace) {
-    selectedPlanId.value = payload.workspace.selectedPlanId;
+    selectedPlanId.value = payload.workspace.selectedPlanId ?? serverPlans[0]?.id ?? null;
+    if (payload.workspace.planCount) planCount.value = payload.workspace.planCount;
     outputs.value = await enrichOutputs(payload.workspace.outputs ?? outputs.value);
+    outputSizePreset.value = payload.workspace.outputSizePreset ?? outputSizePreset.value;
+    referencedAssetIds.value = payload.workspace.referencedAssetIds ?? referencedAssetIds.value;
+    applySavedLayout(payload.workspace.nodePositions);
   }
   await remeasureFlowNodes();
   await layoutGraph(false);
@@ -394,12 +490,16 @@ provide(ASO_WORKBENCH_KEY, {
   selectedPlanId,
   selectedOutputId,
   outputSizePreset,
+  planCount,
   generatingPlanId,
   loadWorkspace,
+  refreshOutputsFromServer,
   onPlansGenerated,
   onSelectPlan,
   onPlanUpdated,
   generatePlanImage,
+  deleteOutputItem,
+  regenerateOutput,
   remeasureFlowNodes,
 });
 
@@ -473,7 +573,7 @@ async function layoutGraph(relayoutAll = false) {
       planNode.position.y = planY;
     }
 
-    const planOutputs = outputs.value.filter((o) => o.planId === plan.id);
+    const planOutputs = outputs.value.filter((o) => resolveOutputPlanId(o, plans.value) === plan.id);
     const planYBase = planNode.position.y;
     let outY = planYBase;
     const outX = planNode.position.x + planDim.w + planOutGap;
@@ -496,6 +596,8 @@ async function layoutGraph(relayoutAll = false) {
     if (!savedPlan) {
       const blockHeight = Math.max(planDim.h, outY - planYBase);
       planY = planYBase + blockHeight + gap;
+    } else {
+      planY = Math.max(planY, planYBase + planDim.h + gap);
     }
   }
 
@@ -520,6 +622,26 @@ onMounted(async () => {
     await layoutGraph(true);
   }
 });
+
+watch(
+  () => project.value?.id,
+  async (id, prevId) => {
+    if (!id || id === prevId) return;
+    stopOutputPoll();
+    generatingPlanId.value = null;
+    selectedPlanId.value = null;
+    selectedOutputId.value = null;
+    const hadSaved = await loadWorkspace();
+    scheduleOutputPoll();
+    if (hadSaved) {
+      if (needsPerItemLayout()) await layoutGraph(false);
+      await remeasureFlowNodes();
+      await fitView({ padding: 0.2, duration: 200 });
+    } else {
+      await layoutGraph(true);
+    }
+  },
+);
 
 onUnmounted(() => {
   if (savePosTimer) clearTimeout(savePosTimer);

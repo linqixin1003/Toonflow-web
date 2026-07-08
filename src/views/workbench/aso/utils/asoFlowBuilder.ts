@@ -26,6 +26,24 @@ const edgeStyle = {
   strokeWidth: 3,
 };
 
+/** Match output to a plan; falls back to index suffix when plan was regenerated. */
+export function resolveOutputPlanId(output: { planId?: string }, plans: { id: string }[]): string | null {
+  if (!output.planId || !plans.length) return null;
+  if (plans.some((p) => p.id === output.planId)) return output.planId;
+
+  const suffix = output.planId.match(/_(\d+)$/)?.[1];
+  if (suffix !== undefined) {
+    const bySuffix = plans.find((p) => p.id.endsWith(`_${suffix}`));
+    if (bySuffix) return bySuffix.id;
+    const idx = Number(suffix);
+    if (!Number.isNaN(idx)) {
+      if (plans[idx]?.id) return plans[idx].id;
+      if (idx > 0 && plans[idx - 1]?.id) return plans[idx - 1].id;
+    }
+  }
+  return null;
+}
+
 export function useAsoFlowBuilder(
   nodePositions: Ref<AsoNodePositions>,
   plans: Ref<any[]>,
@@ -118,10 +136,11 @@ export function useAsoFlowBuilder(
     }
 
     for (const out of outputs.value) {
-      if (!out.planId) continue;
-      const pid = planNodeId(out.planId);
+      const linkedPlanId = resolveOutputPlanId(out, plans.value);
+      if (!linkedPlanId) continue;
+      const pid = planNodeId(linkedPlanId);
       const oid = outputNodeId(out.imageId);
-      if (!plans.value.some((p) => p.id === out.planId)) continue;
+      const orphaned = out.planId && out.planId !== linkedPlanId;
       list.push({
         id: `${pid}-${oid}`,
         source: pid,
@@ -129,7 +148,9 @@ export function useAsoFlowBuilder(
         sourceHandle: `${pid}-source`,
         targetHandle: `${oid}-target`,
         animated: false,
-        style: { ...edgeStyle, stroke: "#2563eb" },
+        style: orphaned
+          ? { ...edgeStyle, stroke: "#f59e0b", strokeDasharray: "6 4" }
+          : { ...edgeStyle, stroke: "#2563eb" },
       });
     }
 

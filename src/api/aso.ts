@@ -38,6 +38,10 @@ export function deleteMaterial(projectId: number, assetId: number) {
   return axios.post("/aso/deleteMaterial", { projectId, assetId });
 }
 
+export function deleteOutput(projectId: number, imageId: number) {
+  return axios.post("/aso/deleteOutput", { projectId, imageId });
+}
+
 export function generateAsoImage(projectId: number, planId: string, presetId?: string, assetIds?: number[]) {
   return axios.post("/aso/generateAsoImage", { projectId, planId, presetId, assetIds });
 }

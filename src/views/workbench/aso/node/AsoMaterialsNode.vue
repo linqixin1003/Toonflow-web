@@ -6,7 +6,7 @@
       <Handle :id="handleIds.source" type="source" :position="Position.Right" style="right: calc(-1 * var(--td-comp-paddingLR-xl))" />
     </div>
     <div class="content">
-      <MaterialGrid v-model:referenced-asset-ids="referencedAssetIds" @changed="loadWorkspace" />
+      <MaterialGrid v-model:referenced-asset-ids="referencedAssetIds" @changed="refreshOutputsFromServer" />
     </div>
   </t-card>
 </template>
@@ -24,7 +24,7 @@ const props = defineProps<{
 const ctx = inject(ASO_WORKBENCH_KEY)!;
 const handleIds = computed(() => props.data.handleIds);
 const referencedAssetIds = ctx.referencedAssetIds;
-const loadWorkspace = ctx.loadWorkspace;
+const refreshOutputsFromServer = ctx.refreshOutputsFromServer;
 </script>
 
 <style scoped lang="scss">
