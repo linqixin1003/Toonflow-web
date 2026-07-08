@@ -157,10 +157,12 @@ defineExpose({ generateImage, generatingPlanId });
   font-size: 12px;
   line-height: 1.5;
   color: var(--td-text-color-secondary);
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.planList.compact .copyPreview {
+  display: block;
+  overflow: visible;
 }
 .planList.compact .planCard.active {
   box-shadow: 0 0 0 2px var(--td-brand-color-light);

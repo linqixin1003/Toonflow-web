@@ -240,6 +240,8 @@ async function onPlansGenerated(payload: { plans: any[]; workspace?: any }) {
     selectedPlanId.value = payload.workspace.selectedPlanId;
     outputs.value = await enrichOutputs(payload.workspace.outputs ?? outputs.value);
   }
+  await nextTick();
+  updateNodeInternals([ASO_NODE_IDS.plans, ASO_NODE_IDS.input]);
 }
 
 function onImageGenerated() {
@@ -361,6 +363,10 @@ onUnmounted(() => {
 
 .flowMain {
   height: 100%;
+
+  :deep(.vue-flow__node) {
+    overflow: visible;
+  }
 
   &.space-dragging {
     cursor: grab !important;

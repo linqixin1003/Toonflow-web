@@ -21,7 +21,7 @@
 </template>
 
 <script setup lang="ts">
-import { Handle, Position } from "@vue-flow/core";
+import { Handle, Position, useVueFlow } from "@vue-flow/core";
 import PlanList from "../PlanList.vue";
 import { ASO_WORKBENCH_KEY } from "../asoContext";
 
@@ -30,6 +30,7 @@ const props = defineProps<{
   data: { handleIds: { target: string; source: string } };
 }>();
 
+const { updateNodeInternals } = useVueFlow({ id: "asoFlowBox" });
 const ctx = inject(ASO_WORKBENCH_KEY)!;
 const handleIds = computed(() => props.data.handleIds);
 const plans = ctx.plans;
@@ -51,6 +52,15 @@ watch(
 onUnmounted(() => {
   if (ctx.planListRef.value === planListEl.value) ctx.planListRef.value = null;
 });
+
+async function remeasureNode() {
+  await nextTick();
+  updateNodeInternals([props.id]);
+}
+
+watch(() => ctx.plans.value.length, remeasureNode);
+watch(ctx.plans, remeasureNode, { deep: true });
+onMounted(remeasureNode);
 </script>
 
 <style scoped lang="scss">
@@ -79,8 +89,7 @@ onUnmounted(() => {
 
   .content {
     margin-top: 10px;
-    max-height: 520px;
-    overflow: auto;
+    overflow: visible;
   }
 
   :deep(.planList.compact .planCard) {
