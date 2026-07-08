@@ -565,6 +565,7 @@
       "edited": "已編輯",
       "generateImage": "生成 ASO 圖",
       "generateFailed": "生成失敗",
+      "savePlanFailed": "保存方案失敗",
       "duplicateGenerating": "該方案正在生成中，請稍候",
       "plansDuplicateGenerating": "創意方案正在生成中，請稍候",
       "visionFallback": "未配置 ASO 圖片理解（asoVisionAi），已用文字模式生成，識圖效果可能下降",
@@ -589,7 +590,15 @@
       "delete": "刪除",
       "sizePreset": "出圖尺寸",
       "general": "通用",
-      "outputsTitle": "成品圖"
+      "outputsTitle": "成品圖",
+      "inspectorTitle": "方案詳情",
+      "inspectorEmpty": "在畫布中選中方案或成品圖，查看詳情",
+      "planStats": "方案統計",
+      "statTitleChars": "標題 {count} 字",
+      "statCopyChars": "正文 {count} 字",
+      "statMaterials": "已選參考素材 {count} 項",
+      "statOutputs": "已生成成品 {count} 張",
+      "planOutputs": "該方案成品"
     },
     "novel": {
       "importText": "匯入原文",

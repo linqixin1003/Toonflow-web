@@ -5,7 +5,10 @@
       :autosize="{ minRows: 4, maxRows: 10 }"
       :placeholder="$t('workbench.aso.inputPlaceholder')" />
     <div class="row f ac jb">
-      <t-input-number v-model="planCount" :min="1" :max="10" :label="$t('workbench.aso.planCount')" />
+      <div class="planCountWrap f ac">
+        <span class="planCountLabel">{{ $t("workbench.aso.planCount") }}</span>
+        <t-input-number v-model="planCount" :min="1" :max="10" theme="column" />
+      </div>
       <t-button theme="primary" :loading="streaming" @click="onGenerate">
         {{ $t("workbench.aso.generatePlans") }}
       </t-button>
@@ -24,14 +27,14 @@ const emit = defineEmits<{ generated: [payload: { plans: any[]; workspace: any }
 
 const { project } = storeToRefs(projectStore());
 const inputText = ref("");
-const planCount = ref(3);
+const planCount = ref(1);
 const { streaming, streamText, run } = useAsoPlanStream();
 
 onMounted(async () => {
   if (project.value?.id) {
     const { data } = await getWorkspace(Number(project.value.id));
     inputText.value = data.workspace?.inputText ?? "";
-    planCount.value = data.workspace?.planCount ?? 3;
+    planCount.value = data.workspace?.planCount ?? 1;
   }
 });
 
@@ -72,6 +75,14 @@ async function onGenerate() {
 }
 .row {
   margin-top: 8px;
+}
+.planCountWrap {
+  gap: 8px;
+}
+.planCountLabel {
+  font-size: 14px;
+  color: var(--td-text-color-primary);
+  white-space: nowrap;
 }
 .streamPreview {
   max-height: 160px;

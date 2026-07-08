@@ -685,6 +685,7 @@
       "edited": "Edited",
       "generateImage": "Generate ASO image",
       "generateFailed": "Generation failed",
+      "savePlanFailed": "Failed to save plan",
       "duplicateGenerating": "This plan is already generating — please wait",
       "plansDuplicateGenerating": "Plan generation is already in progress — please wait",
       "visionFallback": "asoVisionAi is not configured; plans were generated in text-only mode without image understanding",
@@ -709,7 +710,15 @@
       "delete": "Delete",
       "sizePreset": "Output size",
       "general": "General",
-      "outputsTitle": "Outputs"
+      "outputsTitle": "Outputs",
+      "inspectorTitle": "Plan details",
+      "inspectorEmpty": "Select a plan or output on the canvas to inspect",
+      "planStats": "Plan stats",
+      "statTitleChars": "Title: {count} chars",
+      "statCopyChars": "Copy: {count} chars",
+      "statMaterials": "Referenced materials: {count}",
+      "statOutputs": "Outputs: {count}",
+      "planOutputs": "Outputs for this plan"
     },
     "novel": {
       "importText": "Import Text",

@@ -1,5 +1,5 @@
 <template>
-  <div class="planList">
+  <div class="planList" :class="{ compact }">
     <t-empty v-if="!plans.length" :description="$t('workbench.aso.emptyPlans')" />
     <t-card
       v-for="plan in plans"
@@ -9,11 +9,13 @@
       @click="selectPlan(plan.id)">
       <t-input v-model="plan.title" :label="$t('workbench.aso.planTitle')" @blur="savePlan(plan)" @click.stop />
       <t-textarea
+        v-if="!compact"
         v-model="plan.copy"
         :autosize="{ minRows: 3, maxRows: 8 }"
         :label="$t('workbench.aso.planCopy')"
         @blur="savePlan(plan)"
         @click.stop />
+      <div v-else class="copyPreview" @click.stop>{{ plan.copy }}</div>
       <div class="actions f ac jb">
         <t-tag v-if="plan.edited" theme="warning" variant="light">{{ $t("workbench.aso.edited") }}</t-tag>
         <span v-else />
@@ -39,11 +41,13 @@ const props = defineProps<{
   selectedPlanId: string | null;
   presetId?: string;
   referencedAssetIds?: number[];
+  compact?: boolean;
 }>();
 
 const emit = defineEmits<{
   "update:selectedPlanId": [id: string];
   generated: [payload: { imageId: number; planId: string; done?: boolean }];
+  select: [planId: string];
 }>();
 
 const { project } = storeToRefs(projectStore());
@@ -67,6 +71,7 @@ onUnmounted(() => {
 
 async function selectPlan(planId: string) {
   emit("update:selectedPlanId", planId);
+  emit("select", planId);
   if (!project.value?.id) return;
   await saveWorkspace(Number(project.value.id), { selectedPlanId: planId });
 }
@@ -120,6 +125,14 @@ function pollUntilDone(projectId: number, imageId: number, planId: string) {
     }
   }, 2000);
 }
+
+function generateImage(planId: string) {
+  const plan = plans.value.find((p) => p.id === planId);
+  if (!plan) return Promise.resolve();
+  return onGenerateImage(plan);
+}
+
+defineExpose({ generateImage, generatingPlanId });
 </script>
 
 <style scoped lang="scss">
@@ -136,5 +149,18 @@ function pollUntilDone(projectId: number, imageId: number, planId: string) {
 }
 .actions {
   margin-top: 12px;
+}
+.copyPreview {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--td-text-color-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.planList.compact .planCard.active {
+  box-shadow: 0 0 0 2px var(--td-brand-color-light);
 }
 </style>
