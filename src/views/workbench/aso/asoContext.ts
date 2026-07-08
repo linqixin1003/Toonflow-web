@@ -9,13 +9,13 @@ export interface AsoWorkbenchContext {
   selectedPlanId: Ref<string | null>;
   selectedOutputId: Ref<number | null>;
   outputSizePreset: Ref<string>;
-  presetId: Ref<string>;
   planListRef: Ref<InstanceType<typeof PlanList> | null>;
   galleryRef: Ref<InstanceType<typeof OutputGallery> | null>;
   loadWorkspace: () => Promise<void>;
   onPlansGenerated: (payload: { plans: any[]; workspace?: any }) => Promise<void>;
   onImageGenerated: () => void;
   onSelectPlan: (planId: string) => void;
+  onPlanUpdated: (payload: { id: string; title: string; copy: string; edited?: boolean }) => void;
 }
 
 export const ASO_WORKBENCH_KEY: InjectionKey<AsoWorkbenchContext> = Symbol("asoWorkbench");

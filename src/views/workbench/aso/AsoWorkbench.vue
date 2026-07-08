@@ -58,6 +58,7 @@
         :referenced-count="referencedAssetIds.length"
         :preset-id="outputSizePreset"
         :generating="planListRef?.generatingPlanId === selectedPlanId"
+        :generate-blocked="!!planListRef?.generatingPlanId && planListRef?.generatingPlanId !== selectedPlanId"
         @update:preset-id="outputSizePreset = $event"
         @generate-image="onGenerateFromInspector"
         @select-output="selectedOutputId = $event"
@@ -138,8 +139,17 @@ function onSpaceMouseUp() {
   document.removeEventListener("mousemove", onSpaceMouseMove);
 }
 
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (target.isContentEditable) return true;
+  return Boolean(target.closest('[contenteditable="true"], .t-input, .t-textarea, .md-editor'));
+}
+
 useEventListener(document, "keydown", (e: KeyboardEvent) => {
   if (e.code === "Space" && !e.repeat) {
+    if (isEditableTarget(e.target)) return;
     e.preventDefault();
     isSpacePressed.value = true;
   }
@@ -169,7 +179,11 @@ function scheduleSavePositions() {
   if (!project.value?.id) return;
   if (savePosTimer) clearTimeout(savePosTimer);
   savePosTimer = setTimeout(async () => {
-    await saveWorkspace(Number(project.value!.id), { nodePositions: nodePositions.value });
+    try {
+      await saveWorkspace(Number(project.value!.id), { nodePositions: nodePositions.value });
+    } catch (e: any) {
+      window.$message.error(e?.message || $t("workbench.aso.savePlanFailed"));
+    }
   }, 500);
 }
 
@@ -195,17 +209,20 @@ function onGenerateFromInspector(planId: string) {
   planListRef.value?.generateImage(planId);
 }
 
-async function loadWorkspace() {
-  if (!project.value?.id) return;
+async function loadWorkspace(): Promise<boolean> {
+  if (!project.value?.id) return false;
   const { data } = await getWorkspace(Number(project.value.id));
   plans.value = data.workspace?.plans ?? [];
   outputs.value = await enrichOutputs(data.workspace?.outputs ?? []);
   selectedPlanId.value = data.workspace?.selectedPlanId ?? null;
   referencedAssetIds.value = data.workspace?.referencedAssetIds ?? [];
   outputSizePreset.value = data.workspace?.outputSizePreset ?? "general_vertical_1080x1920";
-  if (data.workspace?.nodePositions) {
-    nodePositions.value = { ...DEFAULT_ASO_NODE_POSITIONS, ...data.workspace.nodePositions };
+  const saved = data.workspace?.nodePositions;
+  if (saved && Object.keys(saved).length > 0) {
+    nodePositions.value = { ...DEFAULT_ASO_NODE_POSITIONS, ...saved };
+    return true;
   }
+  return false;
 }
 
 async function onPlansGenerated(payload: { plans: any[]; workspace?: any }) {
@@ -244,13 +261,13 @@ provide(ASO_WORKBENCH_KEY, {
   selectedPlanId,
   selectedOutputId,
   outputSizePreset,
-  presetId: outputSizePreset,
   planListRef,
   galleryRef,
   loadWorkspace,
   onPlansGenerated,
   onImageGenerated,
   onSelectPlan,
+  onPlanUpdated,
 });
 
 async function layoutGraph() {
@@ -298,9 +315,17 @@ async function layoutGraph() {
 }
 
 onMounted(async () => {
-  await loadWorkspace();
+  const hasSavedLayout = await loadWorkspace();
   await nextTick();
-  await layoutGraph();
+  if (hasSavedLayout) {
+    await fitView({ padding: 0.2, duration: 200 });
+  } else {
+    await layoutGraph();
+  }
+});
+
+onUnmounted(() => {
+  if (savePosTimer) clearTimeout(savePosTimer);
 });
 </script>
 

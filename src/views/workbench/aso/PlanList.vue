@@ -48,6 +48,7 @@ const emit = defineEmits<{
   "update:selectedPlanId": [id: string];
   generated: [payload: { imageId: number; planId: string; done?: boolean }];
   select: [planId: string];
+  planUpdated: [payload: { id: string; title: string; copy: string; edited: boolean }];
 }>();
 
 const { project } = storeToRefs(projectStore());
@@ -80,6 +81,7 @@ async function savePlan(plan: any) {
   if (!project.value?.id) return;
   await updatePlan(Number(project.value.id), plan.id, { title: plan.title, copy: plan.copy });
   plan.edited = true;
+  emit("planUpdated", { id: plan.id, title: plan.title, copy: plan.copy, edited: true });
 }
 
 async function onGenerateImage(plan: any) {

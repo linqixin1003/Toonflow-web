@@ -198,6 +198,7 @@ async function remove(assetId: number) {
   await deleteMaterial(Number(project.value.id), assetId);
   const ids = props.referencedAssetIds.filter((x) => x !== assetId);
   emit("update:referencedAssetIds", ids);
+  await saveWorkspace(Number(project.value.id), { referencedAssetIds: ids });
   await load();
   emit("changed");
 }

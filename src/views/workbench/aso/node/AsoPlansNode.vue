@@ -14,7 +14,8 @@
         :referenced-asset-ids="referencedAssetIds"
         compact
         @generated="onImageGenerated"
-        @select="onSelectPlan" />
+        @select="onSelectPlan"
+        @plan-updated="onPlanUpdated" />
     </div>
   </t-card>
 </template>
@@ -37,6 +38,7 @@ const outputSizePreset = ctx.outputSizePreset;
 const referencedAssetIds = ctx.referencedAssetIds;
 const onImageGenerated = ctx.onImageGenerated;
 const onSelectPlan = ctx.onSelectPlan;
+const onPlanUpdated = ctx.onPlanUpdated;
 
 const planListEl = ref<InstanceType<typeof PlanList> | null>(null);
 watch(

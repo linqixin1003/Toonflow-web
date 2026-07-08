@@ -60,7 +60,7 @@
           block
           theme="primary"
           :loading="generating"
-          :disabled="generating"
+          :disabled="generating || generateBlocked"
           @click="emit('generateImage', selectedPlan.id)">
           {{ $t("workbench.aso.generateImage") }}
         </t-button>
@@ -82,6 +82,7 @@ const props = defineProps<{
   referencedCount: number;
   presetId: string;
   generating: boolean;
+  generateBlocked?: boolean;
 }>();
 
 const emit = defineEmits<{
