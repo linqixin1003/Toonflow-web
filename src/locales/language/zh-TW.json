@@ -566,6 +566,8 @@
       "generateImage": "生成 ASO 圖",
       "generateFailed": "生成失敗",
       "savePlanFailed": "保存方案失敗",
+      "flowAutoLayout": "自動排列流程",
+      "flowHint": "拖標題欄移動節點 · 空格+拖動畫布 · 滾輪縮放",
       "duplicateGenerating": "該方案正在生成中，請稍候",
       "plansDuplicateGenerating": "創意方案正在生成中，請稍候",
       "visionFallback": "未配置 ASO 圖片理解（asoVisionAi），已用文字模式生成，識圖效果可能下降",

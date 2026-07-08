@@ -1,50 +1,52 @@
 <template>
-  <div class="asoCanvasWorkbench f">
-    <div class="canvasArea">
-      <div class="canvasScroll">
-        <div class="canvasTrack">
-          <section class="canvasColumn">
-            <header class="columnHeader">{{ $t("workbench.aso.sectionInput") }}</header>
-            <div class="columnBody">
-              <InputPanel :asset-ids="referencedAssetIds" @generated="onPlansGenerated" />
-            </div>
-          </section>
-
-          <section class="canvasColumn">
-            <header class="columnHeader">{{ $t("workbench.aso.sectionMaterials") }}</header>
-            <div class="columnBody">
-              <MaterialGrid v-model:referenced-asset-ids="referencedAssetIds" @changed="loadWorkspace" />
-            </div>
-          </section>
-
-          <section class="canvasColumn">
-            <header class="columnHeader">{{ $t("workbench.aso.sectionPlans") }}</header>
-            <div class="columnBody">
-              <PlanList
-                ref="planListRef"
-                v-model:selected-plan-id="selectedPlanId"
-                :plans="plans"
-                :preset-id="outputSizePreset"
-                :referenced-asset-ids="referencedAssetIds"
-                compact
-                @generated="onImageGenerated"
-                @select="onSelectPlan" />
-            </div>
-          </section>
-
-          <section class="canvasColumn canvasColumnWide">
-            <header class="columnHeader">{{ $t("workbench.aso.sectionOutput") }}</header>
-            <div class="columnBody">
-              <OutputGallery
-                ref="galleryRef"
-                :outputs="outputs"
-                vertical
-                :selected-image-id="selectedOutputId"
-                @select="selectedOutputId = $event" />
-            </div>
-          </section>
+  <div class="asoFlowWorkbench f">
+    <div class="flowPane">
+      <VueFlow
+        id="asoFlowBox"
+        class="flowMain"
+        :class="{ 'is-interacting': isInteracting && otherSetting.interacting, 'space-dragging': isSpacePressed }"
+        :nodes="nodes"
+        :edges="edges"
+        :nodes-draggable="!isSpacePressed"
+        :nodes-connectable="false"
+        :elements-selectable="!isSpacePressed"
+        :edges-updatable="false"
+        :nodes-focusable="false"
+        :edges-focusable="false"
+        :disable-keyboard-a11y="true"
+        :select-nodes-on-drag="false"
+        :auto-pan-on-node-drag="false"
+        :zoom-on-double-click="false"
+        :delete-key-code="null"
+        fit-view-on-init
+        :min-zoom="0.2"
+        :max-zoom="2"
+        :pan-on-scroll="canvasWheelEvent === 'scroll'"
+        :zoom-on-scroll="canvasWheelEvent === 'zoom'"
+        @mousedown="onSpaceMouseDown">
+        <template #node-asoInput="slotProps">
+          <AsoInputNode :id="slotProps.id" :data="slotProps.data" />
+        </template>
+        <template #node-asoMaterials="slotProps">
+          <AsoMaterialsNode :id="slotProps.id" :data="slotProps.data" />
+        </template>
+        <template #node-asoPlans="slotProps">
+          <AsoPlansNode :id="slotProps.id" :data="slotProps.data" />
+        </template>
+        <template #node-asoOutput="slotProps">
+          <AsoOutputNode :id="slotProps.id" :data="slotProps.data" />
+        </template>
+        <Background />
+        <Controls />
+        <div class="flowToolbar f ac">
+          <t-tooltip :content="$t('workbench.aso.flowAutoLayout')" placement="bottom">
+            <t-button variant="outline" @click="layoutGraph()">
+              <template #icon><i-tree-diagram size="16" /></template>
+            </t-button>
+          </t-tooltip>
+          <span class="flowHint">{{ $t("workbench.aso.flowHint") }}</span>
         </div>
-      </div>
+      </VueFlow>
     </div>
 
     <aside class="inspectorPane">
@@ -65,15 +67,44 @@
 </template>
 
 <script setup lang="ts">
-import InputPanel from "./InputPanel.vue";
-import PlanList from "./PlanList.vue";
-import MaterialGrid from "./MaterialGrid.vue";
-import OutputGallery from "./OutputGallery.vue";
+import { useEventListener } from "@vueuse/core";
+import { VueFlow, useVueFlow } from "@vue-flow/core";
+import { Background } from "@vue-flow/background";
+import { Controls } from "@vue-flow/controls";
+import "@vue-flow/core/dist/style.css";
+import "@vue-flow/core/dist/theme-default.css";
+import "@vue-flow/controls/dist/style.css";
+
+import AsoInputNode from "./node/AsoInputNode.vue";
+import AsoMaterialsNode from "./node/AsoMaterialsNode.vue";
+import AsoPlansNode from "./node/AsoPlansNode.vue";
+import AsoOutputNode from "./node/AsoOutputNode.vue";
 import AsoInspector from "./AsoInspector.vue";
-import { getWorkspace, pollingOutputs } from "@/api/aso";
+import { ASO_WORKBENCH_KEY } from "./asoContext";
+import { ASO_NODE_IDS, DEFAULT_ASO_NODE_POSITIONS, useAsoFlowBuilder, type AsoNodePositions } from "./utils/asoFlowBuilder";
+import { getWorkspace, pollingOutputs, saveWorkspace } from "@/api/aso";
 import projectStore from "@/stores/project";
+import settingStore from "@/stores/setting";
+import PlanList from "./PlanList.vue";
+import OutputGallery from "./OutputGallery.vue";
 
 const { project } = storeToRefs(projectStore());
+const { canvasWheelEvent, otherSetting } = storeToRefs(settingStore());
+
+const {
+  toObject,
+  fromObject,
+  fitView,
+  findNode,
+  onNodeDragStart,
+  onNodeDragStop,
+  onMoveStart,
+  onMoveEnd,
+  updateNodeInternals,
+  getNodes,
+  getViewport,
+  setViewport,
+} = useVueFlow({ id: "asoFlowBox" });
 
 const plans = ref<any[]>([]);
 const outputs = ref<any[]>([]);
@@ -81,8 +112,75 @@ const selectedPlanId = ref<string | null>(null);
 const selectedOutputId = ref<number | null>(null);
 const referencedAssetIds = ref<number[]>([]);
 const outputSizePreset = ref("general_vertical_1080x1920");
-const galleryRef = ref<InstanceType<typeof OutputGallery>>();
-const planListRef = ref<InstanceType<typeof PlanList>>();
+const planListRef = ref<InstanceType<typeof PlanList> | null>(null);
+const galleryRef = ref<InstanceType<typeof OutputGallery> | null>(null);
+
+const nodePositions = ref<AsoNodePositions>({ ...DEFAULT_ASO_NODE_POSITIONS });
+const { nodes, edges } = useAsoFlowBuilder(nodePositions);
+
+const isSpacePressed = ref(false);
+let dragOrigin = { x: 0, y: 0, vx: 0, vy: 0 };
+let savePosTimer: ReturnType<typeof setTimeout> | null = null;
+
+function onSpaceMouseDown(e: MouseEvent) {
+  if (!isSpacePressed.value || e.button !== 0) return;
+  e.stopPropagation();
+  e.preventDefault();
+  const vp = getViewport();
+  dragOrigin = { x: e.clientX, y: e.clientY, vx: vp.x, vy: vp.y };
+  document.addEventListener("mousemove", onSpaceMouseMove);
+  document.addEventListener("mouseup", onSpaceMouseUp, { once: true });
+}
+function onSpaceMouseMove(e: MouseEvent) {
+  setViewport({ x: dragOrigin.vx + e.clientX - dragOrigin.x, y: dragOrigin.vy + e.clientY - dragOrigin.y, zoom: getViewport().zoom });
+}
+function onSpaceMouseUp() {
+  document.removeEventListener("mousemove", onSpaceMouseMove);
+}
+
+useEventListener(document, "keydown", (e: KeyboardEvent) => {
+  if (e.code === "Space" && !e.repeat) {
+    e.preventDefault();
+    isSpacePressed.value = true;
+  }
+});
+useEventListener(document, "keyup", (e: KeyboardEvent) => {
+  if (e.code === "Space") isSpacePressed.value = false;
+});
+
+const isInteracting = ref(false);
+let interactionTimer: ReturnType<typeof setTimeout> | null = null;
+function startInteracting() {
+  if (interactionTimer) clearTimeout(interactionTimer);
+  isInteracting.value = true;
+}
+function stopInteracting() {
+  if (interactionTimer) clearTimeout(interactionTimer);
+  interactionTimer = setTimeout(() => {
+    isInteracting.value = false;
+  }, 150);
+}
+
+onNodeDragStart(() => startInteracting());
+onMoveStart(() => startInteracting());
+onMoveEnd(() => stopInteracting());
+
+function scheduleSavePositions() {
+  if (!project.value?.id) return;
+  if (savePosTimer) clearTimeout(savePosTimer);
+  savePosTimer = setTimeout(async () => {
+    await saveWorkspace(Number(project.value!.id), { nodePositions: nodePositions.value });
+  }, 500);
+}
+
+onNodeDragStop(async ({ nodes: draggedNodes }) => {
+  await nextTick();
+  stopInteracting();
+  for (const node of draggedNodes) {
+    nodePositions.value[node.id] = { x: node.position.x, y: node.position.y };
+  }
+  scheduleSavePositions();
+});
 
 async function enrichOutputs(raw: any[]) {
   if (!raw.length || !project.value?.id) return raw;
@@ -105,6 +203,9 @@ async function loadWorkspace() {
   selectedPlanId.value = data.workspace?.selectedPlanId ?? null;
   referencedAssetIds.value = data.workspace?.referencedAssetIds ?? [];
   outputSizePreset.value = data.workspace?.outputSizePreset ?? "general_vertical_1080x1920";
+  if (data.workspace?.nodePositions) {
+    nodePositions.value = { ...DEFAULT_ASO_NODE_POSITIONS, ...data.workspace.nodePositions };
+  }
 }
 
 async function onPlansGenerated(payload: { plans: any[]; workspace?: any }) {
@@ -136,68 +237,85 @@ function onPlanUpdated(payload: { id: string; title: string; copy: string; edite
   };
 }
 
-onMounted(loadWorkspace);
+provide(ASO_WORKBENCH_KEY, {
+  referencedAssetIds,
+  plans,
+  outputs,
+  selectedPlanId,
+  selectedOutputId,
+  outputSizePreset,
+  presetId: outputSizePreset,
+  planListRef,
+  galleryRef,
+  loadWorkspace,
+  onPlansGenerated,
+  onImageGenerated,
+  onSelectPlan,
+});
+
+async function layoutGraph() {
+  await nextTick();
+  const nodeIds = getNodes.value.map((n) => n.id);
+  updateNodeInternals(nodeIds);
+  await nextTick();
+
+  let retries = 20;
+  while (retries-- > 0) {
+    const ready = nodeIds.every((id) => {
+      const node = findNode(id);
+      return node?.dimensions?.width && node.dimensions.width > 0;
+    });
+    if (ready) break;
+    await new Promise((r) => setTimeout(r, 80));
+  }
+
+  const oldData = toObject();
+  const dims = new Map<string, { w: number; h: number }>();
+  for (const n of oldData.nodes) {
+    const vNode = findNode(n.id);
+    dims.set(n.id, { w: vNode?.dimensions?.width ?? 340, h: vNode?.dimensions?.height ?? 200 });
+  }
+
+  const chain = [ASO_NODE_IDS.input, ASO_NODE_IDS.materials, ASO_NODE_IDS.plans, ASO_NODE_IDS.output];
+  const gap = 80;
+  let curX = 0;
+  for (const id of chain) {
+    const node = oldData.nodes.find((n) => n.id === id);
+    const dim = dims.get(id);
+    if (!node || !dim) continue;
+    node.position.x = curX;
+    node.position.y = 0;
+    curX += dim.w + gap;
+  }
+
+  await fromObject(oldData);
+  await nextTick();
+  for (const node of getNodes.value) {
+    nodePositions.value[node.id] = { x: node.position.x, y: node.position.y };
+  }
+  scheduleSavePositions();
+  await fitView({ padding: 0.2, duration: 200 });
+}
+
+onMounted(async () => {
+  await loadWorkspace();
+  await nextTick();
+  await layoutGraph();
+});
 </script>
 
 <style scoped lang="scss">
-.asoCanvasWorkbench {
+.asoFlowWorkbench {
   height: 100%;
   min-height: 0;
   overflow: hidden;
   background: var(--td-bg-color-page);
 }
 
-.canvasArea {
+.flowPane {
   flex: 1;
   min-width: 0;
-  background-color: #eef0f4;
-  background-image: radial-gradient(circle, rgba(120, 130, 150, 0.28) 1px, transparent 1px);
-  background-size: 18px 18px;
-}
-
-.canvasScroll {
-  height: 100%;
-  overflow: auto;
-  padding: 20px 24px 24px;
-  box-sizing: border-box;
-}
-
-.canvasTrack {
-  display: flex;
-  align-items: flex-start;
-  gap: 20px;
-  min-height: calc(100% - 8px);
-}
-
-.canvasColumn {
-  width: 320px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  min-height: 520px;
-}
-
-.canvasColumnWide {
-  width: 280px;
-}
-
-.columnHeader {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--td-text-color-primary);
-  margin-bottom: 10px;
-  padding: 0 4px;
-}
-
-.columnBody {
-  flex: 1;
-  background: var(--td-bg-color-container);
-  border: 1px solid var(--td-border-level-1-color);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-  padding: 14px;
-  min-height: 480px;
-  overflow: auto;
+  position: relative;
 }
 
 .inspectorPane {
@@ -207,20 +325,51 @@ onMounted(loadWorkspace);
   background: var(--td-bg-color-container);
 }
 
-.canvasColumn :deep(.materialGrid .grid) {
-  grid-template-columns: 1fr;
+.flowMain {
+  height: 100%;
+
+  &.space-dragging {
+    cursor: grab !important;
+    :deep(*) {
+      cursor: grab !important;
+    }
+  }
 }
 
-.canvasColumn :deep(.planList.compact .planCard) {
-  padding: 10px;
+.flowToolbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--td-border-level-1-color);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
 }
 
-.canvasColumn :deep(.planList.compact .actions .t-button) {
-  width: 100%;
+.flowHint {
+  font-size: 12px;
+  color: var(--td-text-color-secondary);
+  white-space: nowrap;
+}
+
+.flowMain.is-interacting {
+  :deep(.vue-flow__node) {
+    will-change: transform;
+    contain: layout style paint;
+  }
+}
+
+:deep(.source),
+:deep(.target) {
+  width: 12px;
+  height: 12px;
 }
 
 @media (max-width: 1100px) {
-  .asoCanvasWorkbench {
+  .asoFlowWorkbench {
     flex-direction: column;
   }
   .inspectorPane {
@@ -229,13 +378,8 @@ onMounted(loadWorkspace);
     border-left: none;
     border-top: 1px solid var(--td-border-level-1-color);
   }
-  .canvasTrack {
-    flex-direction: column;
-  }
-  .canvasColumn,
-  .canvasColumnWide {
-    width: 100%;
-    min-height: auto;
+  .flowPane {
+    min-height: 55vh;
   }
 }
 </style>
