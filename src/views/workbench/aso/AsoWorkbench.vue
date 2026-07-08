@@ -46,29 +46,37 @@
           </t-tooltip>
           <span class="flowHint">{{ $t("workbench.aso.flowHint") }}</span>
         </div>
+        <t-tooltip v-if="!inspectorVisible" :content="$t('workbench.aso.showInspector')" placement="left">
+          <div class="openInspectorBtn c" @click.stop="inspectorVisible = true">
+            <i-menu-unfold-one theme="outline" size="22" />
+          </div>
+        </t-tooltip>
       </VueFlow>
     </div>
 
-    <aside class="inspectorPane">
-      <AsoInspector
-        :plans="plans"
-        :outputs="outputs"
-        :selected-plan-id="selectedPlanId"
-        :selected-output-id="selectedOutputId"
-        :referenced-count="referencedAssetIds.length"
-        :preset-id="outputSizePreset"
-        :generating="planListRef?.generatingPlanId === selectedPlanId"
-        :generate-blocked="!!planListRef?.generatingPlanId && planListRef?.generatingPlanId !== selectedPlanId"
-        @update:preset-id="outputSizePreset = $event"
-        @generate-image="onGenerateFromInspector"
-        @select-output="selectedOutputId = $event"
-        @plan-updated="onPlanUpdated" />
-    </aside>
+    <transition name="inspector-slide">
+      <aside v-show="inspectorVisible" class="inspectorPane">
+        <AsoInspector
+          :plans="plans"
+          :outputs="outputs"
+          :selected-plan-id="selectedPlanId"
+          :selected-output-id="selectedOutputId"
+          :referenced-count="referencedAssetIds.length"
+          :preset-id="outputSizePreset"
+          :generating="planListRef?.generatingPlanId === selectedPlanId"
+          :generate-blocked="!!planListRef?.generatingPlanId && planListRef?.generatingPlanId !== selectedPlanId"
+          @update:preset-id="outputSizePreset = $event"
+          @generate-image="onGenerateFromInspector"
+          @select-output="selectedOutputId = $event"
+          @plan-updated="onPlanUpdated"
+          @close="inspectorVisible = false" />
+      </aside>
+    </transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useEventListener } from "@vueuse/core";
+import { useEventListener, useLocalStorage } from "@vueuse/core";
 import { VueFlow, useVueFlow } from "@vue-flow/core";
 import { Background } from "@vue-flow/background";
 import { Controls } from "@vue-flow/controls";
@@ -115,6 +123,7 @@ const referencedAssetIds = ref<number[]>([]);
 const outputSizePreset = ref("general_vertical_1080x1920");
 const planListRef = ref<InstanceType<typeof PlanList> | null>(null);
 const galleryRef = ref<InstanceType<typeof OutputGallery> | null>(null);
+const inspectorVisible = useLocalStorage("aso_inspector_visible", true);
 
 const nodePositions = ref<AsoNodePositions>({ ...DEFAULT_ASO_NODE_POSITIONS });
 const { nodes, edges } = useAsoFlowBuilder(nodePositions);
@@ -378,6 +387,33 @@ onUnmounted(() => {
   font-size: 12px;
   color: var(--td-text-color-secondary);
   white-space: nowrap;
+}
+
+.openInspectorBtn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  background: var(--td-bg-color-container);
+  border: 1px solid var(--td-border-level-1-color);
+  border-radius: 10px;
+  z-index: 10;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  &:hover {
+    background: var(--td-bg-color-container-hover);
+  }
+}
+
+.inspector-slide-enter-active,
+.inspector-slide-leave-active {
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+.inspector-slide-enter-from,
+.inspector-slide-leave-to {
+  transform: translateX(100%);
+  opacity: 0;
 }
 
 .flowMain.is-interacting {

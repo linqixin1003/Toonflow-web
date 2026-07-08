@@ -783,6 +783,8 @@
       "savePlanFailed": "保存方案失败",
       "flowAutoLayout": "自动排列流程",
       "flowHint": "拖标题栏移动节点 · 空格+拖动画布 · 滚轮缩放",
+      "showInspector": "显示方案详情",
+      "hideInspector": "隐藏方案详情",
       "duplicateGenerating": "该方案正在生成中，请稍候",
       "plansDuplicateGenerating": "创意方案正在生成中，请稍候",
       "visionFallback": "未配置 ASO 图片理解（asoVisionAi），已用文字模式生成，识图效果可能下降",

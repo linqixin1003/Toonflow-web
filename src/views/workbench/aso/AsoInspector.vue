@@ -2,7 +2,14 @@
   <div class="asoInspector">
     <div class="inspectorHeader f ac jb">
       <span class="title">{{ headerTitle }}</span>
-      <t-tag v-if="selectedPlan?.edited" size="small" theme="warning" variant="light">{{ $t("workbench.aso.edited") }}</t-tag>
+      <div class="headerActions f ac">
+        <t-tag v-if="selectedPlan?.edited" size="small" theme="warning" variant="light">{{ $t("workbench.aso.edited") }}</t-tag>
+        <t-tooltip :content="$t('workbench.aso.hideInspector')" placement="left">
+          <t-button variant="text" size="small" shape="square" @click="emit('close')">
+            <i-menu-fold-one theme="outline" size="18" />
+          </t-button>
+        </t-tooltip>
+      </div>
     </div>
 
     <t-empty v-if="!selectedPlan && !selectedOutput" :description="$t('workbench.aso.inspectorEmpty')" />
@@ -90,6 +97,7 @@ const emit = defineEmits<{
   generateImage: [planId: string];
   selectOutput: [imageId: number];
   planUpdated: [payload: { id: string; title: string; copy: string; edited: boolean }];
+  close: [];
 }>();
 
 const { project } = storeToRefs(projectStore());
@@ -172,6 +180,10 @@ function stateTheme(state: string) {
   margin-bottom: 16px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--td-border-level-1-color);
+}
+.headerActions {
+  gap: 8px;
+  flex-shrink: 0;
 }
 .title {
   font-size: 16px;
