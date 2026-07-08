@@ -53,7 +53,7 @@
             :key="index">
             <div
               class="item fc c"
-              v-if="menu.type === 'btn' && (project.projectType === 'novel' || !menu.nodelOnly)"
+              v-if="menu.type === 'btn' && menuVisible(menu)"
               :class="{ active: activeMenu == menu.path }"
               @click="handleClick(menu)">
               <component :is="menu.icon" class="icon" />
@@ -89,6 +89,7 @@ const menuList = ref([
 ]);
 
 const rightBtnList = ref([
+  { type: "btn", path: "/aso", labelKey: "workbench.menu.aso", icon: "i-pic", asoOnly: true },
   { type: "btn", path: "/novel", labelKey: "workbench.menu.novel", icon: "i-notebook", nodelOnly: true },
   { type: "btn", path: "/scriptAgent", labelKey: "workbench.menu.scriptAgent", icon: "i-color-filter", nodelOnly: true },
   { type: "btn", path: "/script", labelKey: "workbench.menu.scriptManage", icon: "i-document-folder" },
@@ -108,6 +109,15 @@ watch(
     activeMenu.value = newPath;
   },
 );
+
+function menuVisible(menu: { path?: string; nodelOnly?: boolean; asoOnly?: boolean }) {
+  const type = project.value?.projectType;
+  if (type === "aso") {
+    return menu.asoOnly || menu.path === "/assets";
+  }
+  if (menu.asoOnly) return false;
+  return type === "novel" || !menu.nodelOnly;
+}
 
 function handleClick(menu: any) {
   if (menu.needProject && !project.value) return;

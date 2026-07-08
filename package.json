@@ -7,6 +7,7 @@
     "preview": "vite preview",
     "build": "vue-tsc --build --force && vite build",
     "build-only": "vite build",
+    "sync-dist": "node scripts/sync-dist.mjs",
     "type-check": "vue-tsc --build --force",
     "license": "node scripts/license.ts",
     "i18n:check": "node scripts/findUnusedI18n.ts"

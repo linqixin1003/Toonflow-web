@@ -17,6 +17,7 @@
               <t-select v-model="formState.projectType" :placeholder="$t('workbench.project.dialog.selectType')">
                 <t-option key="基于小说原文" :label="$t('workbench.project.dialog.basedOnNovel')" value="novel" />
                 <t-option key="基于剧本" :label="$t('workbench.project.dialog.basedOnScript')" value="script" />
+                <t-option key="ASO创作" :label="$t('workbench.project.dialog.basedOnAso')" value="aso" />
               </t-select>
             </t-form-item>
             <t-form-item :label="$t('workbench.project.dialog.projectName')">
@@ -35,7 +36,7 @@
                 </t-select>
               </div>
             </t-form-item>
-            <t-form-item :label="$t('workbench.project.dialog.videoModelData')">
+            <t-form-item :label="$t('workbench.project.dialog.videoModelData')" v-if="!isAsoProject">
               <div class="ac" style="gap: 5px; width: 100%">
                 <modelSelect v-model="formState.videoModel" type="video" @change="changeFn" :changeConfig="true" />
                 <t-select v-model="formState.mode" class="paramSelect ml-5" :placeholder="$t('workbench.production.editImage.mode')">
@@ -43,7 +44,7 @@
                 </t-select>
               </div>
             </t-form-item>
-            <t-form-item :label="$t('workbench.project.dialog.videoRatio')">
+            <t-form-item :label="$t('workbench.project.dialog.videoRatio')" v-if="!isAsoProject">
               <t-select v-model="formState.videoRatio" :options="RATIO_OPTIONS" />
             </t-form-item>
             <t-form-item :label="$t('workbench.project.dialog.novelIntro')">
@@ -93,7 +94,7 @@
                 </div>
               </div>
             </t-form-item>
-            <t-form-item>
+            <t-form-item v-if="!isAsoProject">
               <div class="directorManual">
                 <div class="directorManualHeader">
                   <span>{{ $t("workbench.project.dialog.directorManual") }}</span>
@@ -409,6 +410,20 @@ const DEFAULT_FORM: () => ProjectFormData & { id: number; era: string; createTim
 // ===== 表单 =====
 const formState = ref(DEFAULT_FORM());
 
+const isAsoProject = computed(() => formState.value.projectType === "aso");
+
+watch(
+  () => formState.value.projectType,
+  (type) => {
+    if (type === "aso") {
+      formState.value.videoModel = "";
+      formState.value.videoRatio = "16:9";
+      formState.value.directorManual = "";
+      formState.value.mode = "standard";
+    }
+  },
+);
+
 function resetForm() {
   formState.value = DEFAULT_FORM();
 }
@@ -422,13 +437,23 @@ function handleOk() {
   if (!formState.value.name) return window.$message.warning($t("workbench.project.msg.enterProjectName"));
   if (!formState.value.type) return window.$message.warning($t("workbench.project.msg.enterProjectType"));
   if (!formState.value.imageModel) return window.$message.warning($t("workbench.project.msg.enterImageModel"));
-  if (!formState.value.videoModel) return window.$message.warning($t("workbench.project.msg.enterVideoModel"));
+  if (!isAsoProject.value) {
+    if (!formState.value.videoModel) return window.$message.warning($t("workbench.project.msg.enterVideoModel"));
+    if (!formState.value.directorManual) return window.$message.warning($t("workbench.project.msg.directorManual"));
+    if (!formState.value.videoRatio) return window.$message.warning($t("workbench.project.msg.enterVideoRatio"));
+    if (!formState.value.mode) return window.$message.warning($t("workbench.project.msg.selectMode"));
+  }
   if (!formState.value.artStyle) return window.$message.warning($t("workbench.project.msg.enterArtStyle"));
-  if (!formState.value.directorManual) return window.$message.warning($t("workbench.project.msg.directorManual"));
-  if (!formState.value.videoRatio) return window.$message.warning($t("workbench.project.msg.enterVideoRatio"));
   if (!formState.value.intro) return window.$message.warning($t("workbench.project.msg.enterProjectIntro"));
   if (!formState.value.imageQuality) return window.$message.warning($t("workbench.project.msg.enterProjectQuality"));
-  if (!formState.value.mode) return window.$message.warning($t("workbench.project.msg.selectMode"));
+  const videoPayload = isAsoProject.value
+    ? { videoModel: "", videoRatio: "16:9", directorManual: "", mode: "standard" }
+    : {
+        videoModel: formState.value.videoModel,
+        videoRatio: formState.value.videoRatio,
+        directorManual: formState.value.directorManual,
+        mode: formState.value.mode,
+      };
   if (isEdit.value) {
     emit("edit", {
       id: formState.value.id as unknown as string,
@@ -436,13 +461,10 @@ function handleOk() {
       intro: formState.value.intro,
       type: formState.value.type,
       artStyle: formState.value.artStyle,
-      videoRatio: formState.value.videoRatio,
       imageModel: formState.value.imageModel,
-      videoModel: formState.value.videoModel,
       projectType: formState.value.projectType || "novel",
-      directorManual: formState.value.directorManual,
       imageQuality: formState.value.imageQuality,
-      mode: formState.value.mode,
+      ...videoPayload,
     });
   } else {
     emit("add", {
@@ -451,12 +473,9 @@ function handleOk() {
       intro: formState.value.intro,
       type: formState.value.type,
       artStyle: formState.value.artStyle,
-      videoRatio: formState.value.videoRatio || "16:9",
       imageModel: formState.value.imageModel,
-      videoModel: formState.value.videoModel,
       imageQuality: formState.value.imageQuality,
-      directorManual: formState.value.directorManual,
-      mode: formState.value.mode,
+      ...videoPayload,
     });
   }
   resetForm();

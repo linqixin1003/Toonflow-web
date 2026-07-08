@@ -23,7 +23,7 @@
           </div>
           <div>
             <t-tag shape="round">
-              {{ project.projectType == "novel" ? $t(`workbench.project.type.novel`) : $t(`workbench.project.type.script`) }}
+              {{ projectTypeLabel(project.projectType) }}
             </t-tag>
           </div>
         </div>
@@ -89,12 +89,18 @@ onMounted(() => {
 
 const router = useRouter();
 
+function projectTypeLabel(projectType: string) {
+  if (projectType === "aso") return $t("workbench.project.type.aso");
+  if (projectType === "script") return $t("workbench.project.type.script");
+  return $t("workbench.project.type.novel");
+}
+
 async function openProject(projectId: string | undefined) {
   const item = allProject.value.find((p) => p.id === projectId);
 
   if (!item) return window.$message.error($t("workbench.project.msg.notFound"));
 
-  if (!item.imageModel || !item.videoModel) {
+  if (!item.imageModel || (item.projectType !== "aso" && !item.videoModel)) {
     window.$message.warning($t("workbench.project.msg.modelProviderDisabled"));
     return openEdit(item);
   }
@@ -105,7 +111,7 @@ async function openProject(projectId: string | undefined) {
         modelId: item.imageModel,
       });
     }
-    if (item.videoModel) {
+    if (item.projectType !== "aso" && item.videoModel) {
       await axios.post("/modelSelect/getModelDetail", {
         modelId: item.videoModel,
       });
@@ -118,6 +124,7 @@ async function openProject(projectId: string | undefined) {
   project.value = item;
   if (item.projectType === "novel") router.push(`/novel`);
   else if (item.projectType === "script") router.push(`/script`);
+  else if (item.projectType === "aso") router.push(`/aso`);
 }
 
 function openEdit(item: {

@@ -48,6 +48,10 @@ const router = createRouter({
           component: () => import("@/views/cornerScape/index.vue"),
         },
         {
+          path: "/aso",
+          component: () => import("@/views/workbench/aso/AsoWorkbench.vue"),
+        },
+        {
           path: "/production",
           component: () => import("@/views/production/index.vue"),
         },

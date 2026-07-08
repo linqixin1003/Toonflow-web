@@ -179,6 +179,15 @@ yarn build:prod
 
 构建产物将输出到 `dist` 目录。
 
+**同步到 Toonflow-app（本 fork ASO 功能）：**
+
+```bash
+yarn build
+yarn sync-dist   # 复制 dist → ../toonflow/data/web（可设 TOONFLOW_APP_DIR）
+```
+
+后端开发服务默认 `http://localhost:10588`。Fork 仓库：`https://github.com/linqixin1003/Toonflow-web.git`
+
 ### 5. 预览生产构建
 
 ```bash
