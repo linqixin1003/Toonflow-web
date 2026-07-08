@@ -1,6 +1,4 @@
 import type { InjectionKey, Ref } from "vue";
-import type PlanList from "./PlanList.vue";
-import type OutputGallery from "./OutputGallery.vue";
 
 export interface AsoWorkbenchContext {
   referencedAssetIds: Ref<number[]>;
@@ -9,13 +7,13 @@ export interface AsoWorkbenchContext {
   selectedPlanId: Ref<string | null>;
   selectedOutputId: Ref<number | null>;
   outputSizePreset: Ref<string>;
-  planListRef: Ref<InstanceType<typeof PlanList> | null>;
-  galleryRef: Ref<InstanceType<typeof OutputGallery> | null>;
-  loadWorkspace: () => Promise<void>;
+  generatingPlanId: Ref<string | null>;
+  loadWorkspace: () => Promise<boolean>;
   onPlansGenerated: (payload: { plans: any[]; workspace?: any }) => Promise<void>;
-  onImageGenerated: () => void;
   onSelectPlan: (planId: string) => void;
   onPlanUpdated: (payload: { id: string; title: string; copy: string; edited?: boolean }) => void;
+  generatePlanImage: (planId: string) => Promise<void>;
+  remeasureFlowNodes: () => Promise<void>;
 }
 
 export const ASO_WORKBENCH_KEY: InjectionKey<AsoWorkbenchContext> = Symbol("asoWorkbench");
