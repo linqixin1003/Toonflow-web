@@ -112,11 +112,14 @@ import {
   useAsoFlowBuilder,
   type AsoNodePositions,
 } from "./utils/asoFlowBuilder";
-import { getWorkspace, pollingOutputs, saveWorkspace, generateAsoImage, deleteOutput } from "@/api/aso";
+import * as asoApi from "@/api/aso";
+import * as uiuxApi from "@/api/uiux";
 import projectStore from "@/stores/project";
 import settingStore from "@/stores/setting";
 
 const { project } = storeToRefs(projectStore());
+const isUiuxProject = computed(() => project.value?.projectType === "uiux");
+const api = computed(() => (isUiuxProject.value ? uiuxApi : asoApi));
 const { canvasWheelEvent, otherSetting } = storeToRefs(settingStore());
 
 const {
@@ -343,7 +346,7 @@ function scheduleSavePositions() {
   savePosTimer = setTimeout(async () => {
     try {
       pruneNodePositions();
-      await saveWorkspace(Number(project.value!.id), { nodePositions: nodePositions.value });
+      await api.value.saveWorkspace(Number(project.value!.id), { nodePositions: nodePositions.value });
     } catch (e: any) {
       window.$message.error(e?.message || $t("workbench.aso.savePlanFailed"));
     }
@@ -361,7 +364,7 @@ onNodeDragStop(async ({ nodes: draggedNodes }) => {
 
 async function enrichOutputs(raw: any[], projectId: number, requestId: number) {
   if (!raw.length) return raw;
-  const { data } = await pollingOutputs(projectId, raw.map((o) => o.imageId));
+  const { data } = await api.value.pollingOutputs(projectId, raw.map((o) => o.imageId));
   if (requestId !== loadRequestId) return null;
   return raw.map((o) => {
     const polled = data?.find((d: any) => d.imageId === o.imageId);
@@ -436,7 +439,7 @@ async function refreshOutputsPending() {
     return;
   }
   try {
-    const { data } = await pollingOutputs(projectId, pending);
+    const { data } = await api.value.pollingOutputs(projectId, pending);
     if (requestId !== loadRequestId || Number(project.value?.id ?? 0) !== projectId) return;
     if (Array.isArray(data) && data.length) applyPollResults(data);
   } catch {
@@ -470,7 +473,7 @@ async function generatePlanImage(
   generatingPlanId.value = planId;
 
   try {
-    const { data } = await generateAsoImage(
+    const { data } = await api.value.generateAsoImage(
       Number(project.value.id),
       planId,
       presetId ?? outputSizePreset.value,
@@ -520,7 +523,7 @@ async function generatePlanImage(
 async function deleteOutputItem(imageId: number, options?: { silent?: boolean }) {
   if (!project.value?.id) return;
   try {
-    await deleteOutput(Number(project.value.id), imageId);
+    await api.value.deleteOutput(Number(project.value.id), imageId);
     outputs.value = outputs.value.filter((o) => o.imageId !== imageId);
     if (selectedOutputId.value === imageId) selectedOutputId.value = null;
     pruneNodePositions();
@@ -641,7 +644,7 @@ async function loadWorkspace(options: LoadWorkspaceOptions = {}): Promise<boolea
   if (!project.value?.id) return false;
   const requestId = ++loadRequestId;
   const projectId = Number(project.value.id);
-  const { data } = await getWorkspace(projectId);
+  const { data } = await api.value.getWorkspace(projectId);
   if (requestId !== loadRequestId) return false;
 
   if (opts.outputs) {

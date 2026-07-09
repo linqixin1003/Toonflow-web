@@ -1,8 +1,17 @@
-import { generatePlans, generatePlansStream } from "@/api/aso";
+import { generatePlans as asoGeneratePlans, generatePlansStream as asoGeneratePlansStream } from "@/api/aso";
 
 const STREAM_FALLBACK_ERRORS = /流式连接失败|Failed to fetch|Network Error|network error/i;
 
-export function useAsoPlanStream() {
+type PlanStreamApi = {
+  generatePlans: typeof asoGeneratePlans;
+  generatePlansStream: typeof asoGeneratePlansStream;
+};
+
+export function useAsoPlanStream(api?: PlanStreamApi) {
+  const { generatePlans, generatePlansStream } = api ?? {
+    generatePlans: asoGeneratePlans,
+    generatePlansStream: asoGeneratePlansStream,
+  };
   const streaming = ref(false);
   const streamText = ref("");
   const errorMessage = ref("");

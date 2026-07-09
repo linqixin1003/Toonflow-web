@@ -33,7 +33,8 @@
 </template>
 
 <script setup lang="ts">
-import { updatePlan, saveWorkspace, generateAsoImage, pollingOutputs } from "@/api/aso";
+import * as asoApi from "@/api/aso";
+import * as uiuxApi from "@/api/uiux";
 import projectStore from "@/stores/project";
 
 const props = defineProps<{
@@ -52,6 +53,8 @@ const emit = defineEmits<{
 }>();
 
 const { project } = storeToRefs(projectStore());
+const isUiuxProject = computed(() => project.value?.projectType === "uiux");
+const api = computed(() => (isUiuxProject.value ? uiuxApi : asoApi));
 const generatingPlanId = ref<string | null>(null);
 const localPlans = ref<any[]>([]);
 let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -74,12 +77,12 @@ async function selectPlan(planId: string) {
   emit("update:selectedPlanId", planId);
   emit("select", planId);
   if (!project.value?.id) return;
-  await saveWorkspace(Number(project.value.id), { selectedPlanId: planId });
+  await api.value.saveWorkspace(Number(project.value.id), { selectedPlanId: planId });
 }
 
 async function savePlan(plan: any) {
   if (!project.value?.id) return;
-  await updatePlan(Number(project.value.id), plan.id, { title: plan.title, copy: plan.copy });
+  await api.value.updatePlan(Number(project.value.id), plan.id, { title: plan.title, copy: plan.copy });
   plan.edited = true;
   emit("planUpdated", { id: plan.id, title: plan.title, copy: plan.copy, edited: true });
 }
@@ -90,7 +93,7 @@ async function onGenerateImage(plan: any) {
   generatingPlanId.value = plan.id;
   const hasMatrix = (plan.imagePrompts?.length ?? 0) > 0;
   try {
-    const { data } = await generateAsoImage(
+    const { data } = await api.value.generateAsoImage(
       projectId,
       plan.id,
       props.presetId,
@@ -115,7 +118,7 @@ function pollUntilDone(projectId: number, imageId: number, planId: string) {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(async () => {
     try {
-      const { data } = await pollingOutputs(projectId, [imageId]);
+      const { data } = await api.value.pollingOutputs(projectId, [imageId]);
       const item = data?.[0];
       if (!item) return;
       if (item.state === "已完成") {

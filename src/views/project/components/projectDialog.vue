@@ -18,6 +18,7 @@
                 <t-option key="基于小说原文" :label="$t('workbench.project.dialog.basedOnNovel')" value="novel" />
                 <t-option key="基于剧本" :label="$t('workbench.project.dialog.basedOnScript')" value="script" />
                 <t-option key="ASO创作" :label="$t('workbench.project.dialog.basedOnAso')" value="aso" />
+                <t-option key="UI-UX创作" :label="$t('workbench.project.dialog.basedOnUiux')" value="uiux" />
               </t-select>
             </t-form-item>
             <t-form-item :label="$t('workbench.project.dialog.projectName')">
@@ -434,11 +435,12 @@ const DEFAULT_FORM: () => ProjectFormData & { id: number; era: string; createTim
 const formState = ref(DEFAULT_FORM());
 
 const isAsoProject = computed(() => formState.value.projectType === "aso");
+const isCreativeProject = computed(() => formState.value.projectType === "aso" || formState.value.projectType === "uiux");
 
 watch(
   () => formState.value.projectType,
   (type) => {
-    if (type === "aso") {
+    if (type === "aso" || type === "uiux") {
       formState.value.videoModel = "";
       formState.value.videoRatio = "16:9";
       formState.value.directorManual = "";
@@ -460,7 +462,7 @@ function handleOk() {
   if (!formState.value.name) return window.$message.warning($t("workbench.project.msg.enterProjectName"));
   if (!formState.value.type) return window.$message.warning($t("workbench.project.msg.enterProjectType"));
   if (!formState.value.imageModel) return window.$message.warning($t("workbench.project.msg.enterImageModel"));
-  if (!isAsoProject.value) {
+  if (!isCreativeProject.value) {
     if (!formState.value.videoModel) return window.$message.warning($t("workbench.project.msg.enterVideoModel"));
     if (!formState.value.directorManual) return window.$message.warning($t("workbench.project.msg.directorManual"));
     if (!formState.value.videoRatio) return window.$message.warning($t("workbench.project.msg.enterVideoRatio"));
@@ -469,7 +471,7 @@ function handleOk() {
   if (!formState.value.artStyle) return window.$message.warning($t("workbench.project.msg.enterArtStyle"));
   if (!formState.value.intro) return window.$message.warning($t("workbench.project.msg.enterProjectIntro"));
   if (!formState.value.imageQuality) return window.$message.warning($t("workbench.project.msg.enterProjectQuality"));
-  const videoPayload = isAsoProject.value
+  const videoPayload = isCreativeProject.value
     ? { videoModel: "", videoRatio: "16:9", directorManual: "", mode: "standard" }
     : {
         videoModel: formState.value.videoModel,

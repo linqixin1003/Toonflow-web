@@ -17,6 +17,11 @@
         {{ $t("workbench.aso.generatePlans") }}
       </t-button>
     </div>
+    <div v-if="isUiuxProject" class="optimizeRow">
+      <t-button variant="outline" :loading="optimizing" :disabled="!inputText.trim()" @click="onOptimizePrompt">
+        {{ $t("workbench.uiux.optimizePrompt") }}
+      </t-button>
+    </div>
     <div class="planHint">{{ $t("workbench.aso.planCountHint") }}</div>
     <div class="planHint">{{ $t("workbench.aso.imagePromptCountHint") }}</div>
     <div v-if="totalPromptCount > 0" class="planHint highlight">
@@ -72,7 +77,8 @@
 
 <script setup lang="ts">
 import { useAsoPlanStream } from "@/composables/useAsoPlanStream";
-import { getWorkspace, saveWorkspace } from "@/api/aso";
+import * as asoApi from "@/api/aso";
+import * as uiuxApi from "@/api/uiux";
 import projectStore from "@/stores/project";
 import { ASO_WORKBENCH_KEY } from "./asoContext";
 import { resolveImagePromptCount } from "@/utils/asoNumberedPoints";
@@ -82,10 +88,18 @@ const emit = defineEmits<{ generated: [payload: { plans: any[]; workspace: any }
 
 const ctx = inject(ASO_WORKBENCH_KEY, null);
 const { project } = storeToRefs(projectStore());
+const isUiuxProject = computed(() => project.value?.projectType === "uiux");
+const api = computed(() => (isUiuxProject.value ? uiuxApi : asoApi));
 const inputText = ref("");
 const planCount = ctx?.planCount ?? ref(1);
 const imagePromptCount = ctx?.imagePromptCount ?? ref(0);
-const { streaming, streamText, run, abort: abortPlanStream } = useAsoPlanStream();
+const { streaming, streamText, run, abort: abortPlanStream } = useAsoPlanStream(
+  computed(() => ({
+    generatePlans: api.value.generatePlans,
+    generatePlansStream: api.value.generatePlansStream,
+  })).value,
+);
+const optimizing = ref(false);
 const streamProgress = ref("");
 const showGenModeDialog = ref(false);
 const pendingGenerate = ref<{ existing: number; requested: number } | null>(null);
@@ -126,7 +140,7 @@ function syncCountsFromWorkspace(workspace: any) {
 
 async function loadInputState() {
   if (!project.value?.id) return;
-  const { data } = await getWorkspace(Number(project.value.id));
+  const { data } = await api.value.getWorkspace(Number(project.value.id));
   inputText.value = data.workspace?.inputText ?? "";
   syncCountsFromWorkspace(data.workspace);
   const savedPromptCount = data.workspace?.imagePromptCount;
@@ -153,10 +167,26 @@ watch(
 
 async function onCountsChange() {
   if (!project.value?.id) return;
-  await saveWorkspace(Number(project.value.id), {
+  await api.value.saveWorkspace(Number(project.value.id), {
     planCount: planCount.value,
     imagePromptCount: imagePromptCount.value,
   });
+}
+
+async function onOptimizePrompt() {
+  if (!project.value?.id || !inputText.value.trim()) return;
+  optimizing.value = true;
+  try {
+    const { data } = await uiuxApi.optimizePrompt(Number(project.value.id), inputText.value);
+    if (data?.optimizedText) {
+      inputText.value = data.optimizedText;
+      window.$message.success($t("workbench.uiux.optimizeSuccess"));
+    }
+  } catch (e: any) {
+    window.$message.error(e?.message || $t("workbench.uiux.optimizeFailed"));
+  } finally {
+    optimizing.value = false;
+  }
 }
 
 function confirmGenerate(mode: "append" | "replace") {
@@ -199,7 +229,7 @@ async function executeGenerate(appendPlans: boolean) {
       ctx.plans.value = [];
       ctx.outputs.value = [];
     }
-    await saveWorkspace(projectId, {
+    await api.value.saveWorkspace(projectId, {
       inputText: inputText.value,
       planCount: requested,
       imagePromptCount: imagePromptCount.value,
@@ -338,5 +368,10 @@ async function onGenerate() {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
+}
+.optimizeRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
 }
 </style>

@@ -71,7 +71,8 @@
 <script setup lang="ts">
 import modelSelect from "@/components/modelSelect.vue";
 import projectStore from "@/stores/project";
-import { editAsoOutput, pollingOutputs } from "@/api/aso";
+import * as asoApi from "@/api/aso";
+import * as uiuxApi from "@/api/uiux";
 import { outputCardTitle, outputOriginalUrl } from "../utils/outputPreview";
 
 const props = defineProps<{
@@ -86,6 +87,8 @@ const emit = defineEmits<{
 }>();
 
 const { project } = storeToRefs(projectStore());
+const isUiuxProject = computed(() => project.value?.projectType === "uiux");
+const api = computed(() => (isUiuxProject.value ? uiuxApi : asoApi));
 
 const instruction = ref("");
 const model = ref("");
@@ -144,7 +147,7 @@ function onClose() {
 async function pollEditOutput(projectId: number, imageId: number) {
   const deadline = Date.now() + 5 * 60 * 1000;
   while (Date.now() < deadline) {
-    const { data } = await pollingOutputs(projectId, [imageId]);
+    const { data } = await api.value.pollingOutputs(projectId, [imageId]);
     const row = Array.isArray(data) ? data[0] : null;
     if (!row) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -162,7 +165,7 @@ async function runEdit(apply: boolean) {
   generating.value = true;
   const projectId = Number(project.value.id);
   try {
-    const { data } = await editAsoOutput({
+    const { data } = await api.value.editAsoOutput({
       projectId,
       imageId: props.output.imageId,
       prompt: instruction.value.trim(),

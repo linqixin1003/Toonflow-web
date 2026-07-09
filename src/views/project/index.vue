@@ -91,6 +91,7 @@ const router = useRouter();
 
 function projectTypeLabel(projectType: string) {
   if (projectType === "aso") return $t("workbench.project.type.aso");
+  if (projectType === "uiux") return $t("workbench.project.type.uiux");
   if (projectType === "script") return $t("workbench.project.type.script");
   return $t("workbench.project.type.novel");
 }
@@ -100,7 +101,7 @@ async function openProject(projectId: string | undefined) {
 
   if (!item) return window.$message.error($t("workbench.project.msg.notFound"));
 
-  if (!item.imageModel || (item.projectType !== "aso" && !item.videoModel)) {
+  if (!item.imageModel || (item.projectType !== "aso" && item.projectType !== "uiux" && !item.videoModel)) {
     window.$message.warning($t("workbench.project.msg.modelProviderDisabled"));
     return openEdit(item);
   }
@@ -111,7 +112,7 @@ async function openProject(projectId: string | undefined) {
         modelId: item.imageModel,
       });
     }
-    if (item.projectType !== "aso" && item.videoModel) {
+    if (item.projectType !== "aso" && item.projectType !== "uiux" && item.videoModel) {
       await axios.post("/modelSelect/getModelDetail", {
         modelId: item.videoModel,
       });
@@ -124,7 +125,7 @@ async function openProject(projectId: string | undefined) {
   project.value = item;
   if (item.projectType === "novel") router.push(`/novel`);
   else if (item.projectType === "script") router.push(`/script`);
-  else if (item.projectType === "aso") router.push(`/aso`);
+  else if (item.projectType === "aso" || item.projectType === "uiux") router.push(`/aso`);
 }
 
 function openEdit(item: {

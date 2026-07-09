@@ -702,6 +702,7 @@
         },
         "basedOnScript": "基于剧本",
         "basedOnAso": "ASO 创作",
+        "basedOnUiux": "UI-UX 创作",
         "mdFile": "视觉手册文件",
         "directorManual": "导演手册",
         "addDirectorManual": "新建导演手册",
@@ -761,7 +762,8 @@
       "type": {
         "novel": "基于小说原文",
         "script": "基于小说剧本",
-        "aso": "ASO 创作"
+        "aso": "ASO 创作",
+        "uiux": "UI-UX 创作"
       }
     },
     "aso": {
@@ -897,6 +899,11 @@
       "statMaterials": "已选参考素材 {count} 项",
       "statOutputs": "已生成成品 {count} 张",
       "planOutputs": "该方案成品"
+    },
+    "uiux": {
+      "optimizePrompt": "优化提示词",
+      "optimizeSuccess": "提示词优化成功",
+      "optimizeFailed": "提示词优化失败"
     },
     "novel": {
       "importText": "导入原文",

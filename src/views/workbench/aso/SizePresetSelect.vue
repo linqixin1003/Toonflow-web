@@ -9,13 +9,16 @@
 </template>
 
 <script setup lang="ts">
-import { getSizePresets, saveWorkspace } from "@/api/aso";
+import * as asoApi from "@/api/aso";
+import * as uiuxApi from "@/api/uiux";
 import projectStore from "@/stores/project";
 
 const props = defineProps<{ modelValue: string }>();
 const emit = defineEmits<{ "update:modelValue": [id: string] }>();
 
 const { project } = storeToRefs(projectStore());
+const isUiuxProject = computed(() => project.value?.projectType === "uiux");
+const api = computed(() => (isUiuxProject.value ? uiuxApi : asoApi));
 const presetMap = ref<Record<string, any>>({});
 const groups = ref<{ label: string; ids: string[] }[]>([]);
 const selected = ref(props.modelValue);
@@ -28,13 +31,19 @@ watch(
 );
 
 onMounted(async () => {
-  const { data } = await getSizePresets();
+  const { data } = await api.value.getSizePresets();
   for (const p of data.presets) presetMap.value[p.id] = p;
-  groups.value = [
-    { label: "iOS", ids: data.grouped.ios },
-    { label: "Android", ids: data.grouped.android },
-    { label: $t("workbench.aso.general") as string, ids: data.grouped.general },
-  ];
+  const groupEntries: { label: string; ids: string[] }[] = [];
+  if (data.grouped.ios?.length) {
+    groupEntries.push({ label: "iOS", ids: data.grouped.ios });
+  }
+  if (data.grouped.android?.length) {
+    groupEntries.push({ label: "Android", ids: data.grouped.android });
+  }
+  if (data.grouped.general?.length) {
+    groupEntries.push({ label: $t("workbench.aso.general") as string, ids: data.grouped.general });
+  }
+  groups.value = groupEntries;
   if (!selected.value) {
     const def = data.presets.find((p: any) => p.default);
     if (def) {
@@ -51,6 +60,6 @@ function labelFor(id: string) {
 
 async function onChange(val: string) {
   emit("update:modelValue", val);
-  if (project.value?.id) await saveWorkspace(Number(project.value.id), { outputSizePreset: val });
+  if (project.value?.id) await api.value.saveWorkspace(Number(project.value.id), { outputSizePreset: val });
 }
 </script>
