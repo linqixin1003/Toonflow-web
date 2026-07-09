@@ -33,8 +33,8 @@
         <template #node-asoPlanItem="slotProps">
           <AsoPlanItemNode :id="slotProps.id" :data="slotProps.data" />
         </template>
-        <template #node-asoOutputItem="slotProps">
-          <AsoOutputItemNode :id="slotProps.id" :data="slotProps.data" />
+        <template #node-asoPlanOutputs="slotProps">
+          <AsoPlanOutputsNode :id="slotProps.id" :data="slotProps.data" />
         </template>
         <Background />
         <Controls />
@@ -64,15 +64,24 @@
           :selected-output-id="selectedOutputId"
           :referenced-count="referencedAssetIds.length"
           :preset-id="outputSizePreset"
-          :generating="generatingPlanId === selectedPlanId"
-          :generate-blocked="!!generatingPlanId && generatingPlanId !== selectedPlanId"
+          :generating="isPlanBatchGenerating(selectedPlanId)"
+          :is-slot-generating="(slot: number) => isSlotGenerating(selectedPlanId!, slot)"
+          :retrying-output-id="retryingOutputId"
           @update:preset-id="outputSizePreset = $event"
-          @generate-image="generatePlanImage"
+          @generate-image="(planId, options) => generatePlanImage(planId, outputSizePreset, options)"
           @select-output="selectedOutputId = $event"
+          @retry-output="onRetryOutput"
+          @edit-output="openOutputEdit"
           @plan-updated="onPlanUpdated"
           @close="inspectorVisible = false" />
       </aside>
     </transition>
+
+    <AsoOutputEditDrawer
+      v-model:visible="outputEditVisible"
+      :output="outputEditTarget"
+      :referenced-asset-ids="referencedAssetIds"
+      @applied="onOutputEditApplied" />
   </div>
 </template>
 
@@ -88,14 +97,17 @@ import "@vue-flow/controls/dist/style.css";
 import AsoInputNode from "./node/AsoInputNode.vue";
 import AsoMaterialsNode from "./node/AsoMaterialsNode.vue";
 import AsoPlanItemNode from "./node/AsoPlanItemNode.vue";
-import AsoOutputItemNode from "./node/AsoOutputItemNode.vue";
+import AsoPlanOutputsNode from "./node/AsoPlanOutputsNode.vue";
 import AsoInspector from "./AsoInspector.vue";
+import AsoOutputEditDrawer from "./components/AsoOutputEditDrawer.vue";
 import { ASO_WORKBENCH_KEY, type LoadWorkspaceOptions } from "./asoContext";
 import {
   ASO_NODE_IDS,
   DEFAULT_ASO_NODE_POSITIONS,
+  estimatePlanOutputsNodeHeight,
+  layoutPlanOutputsNodePosition,
   planNodeId,
-  outputNodeId,
+  planOutputsNodeId,
   resolveOutputPlanId,
   useAsoFlowBuilder,
   type AsoNodePositions,
@@ -129,7 +141,124 @@ const selectedOutputId = ref<number | null>(null);
 const referencedAssetIds = ref<number[]>([]);
 const outputSizePreset = ref("general_vertical_1080x1920");
 const planCount = ref(1);
+const imagePromptCount = ref(0);
 const generatingPlanId = ref<string | null>(null);
+const generatingSlots = ref<Set<string>>(new Set());
+const retryingOutputId = ref<number | null>(null);
+const outputEditVisible = ref(false);
+const outputEditTarget = ref<any | null>(null);
+
+function slotGenKey(planId: string, promptSlot?: number) {
+  return promptSlot != null ? `${planId}:${promptSlot}` : `${planId}:legacy`;
+}
+
+function resolveGenKeys(planId: string, options?: { promptSlot?: number; generateAll?: boolean }): string[] {
+  const plan = plans.value.find((p) => p.id === planId);
+  if (options?.generateAll && plan?.imagePrompts?.length) {
+    return plan.imagePrompts.map((ip: { slot: number }) => slotGenKey(planId, ip.slot));
+  }
+  if (options?.promptSlot != null) {
+    return [slotGenKey(planId, options.promptSlot)];
+  }
+  return [slotGenKey(planId)];
+}
+
+function isSlotGenerating(planId: string, promptSlot?: number) {
+  return generatingSlots.value.has(slotGenKey(planId, promptSlot));
+}
+
+function isPlanBatchGenerating(planId: string | null) {
+  if (!planId) return false;
+  const prefix = `${planId}:`;
+  for (const key of generatingSlots.value) {
+    if (key.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
+function clearOutputGenerating(output: { planId?: string; promptSlot?: number }) {
+  const planId = resolveOutputPlanId(output as any, plans.value) ?? output.planId;
+  if (!planId) return;
+  const key = slotGenKey(planId, output.promptSlot);
+  if (!generatingSlots.value.has(key)) return;
+  const next = new Set(generatingSlots.value);
+  next.delete(key);
+  generatingSlots.value = next;
+  if (!next.size) generatingPlanId.value = null;
+}
+
+/** Batch completion: suppress per-image toasts until all scheduled outputs finish. */
+const batchDonePending = ref<{ planId: string; remaining: number; total: number; failedCount: number } | null>(
+  null,
+);
+
+function syncGeneratingSlotsFromScheduled(
+  planId: string,
+  scheduled: Array<{ promptSlot?: number }>,
+) {
+  const prefix = `${planId}:`;
+  const next = new Set(generatingSlots.value);
+  for (const key of [...next]) {
+    if (key.startsWith(prefix)) next.delete(key);
+  }
+  for (const out of scheduled) {
+    next.add(slotGenKey(planId, out.promptSlot));
+  }
+  generatingSlots.value = next;
+  if (!next.size) generatingPlanId.value = null;
+  else generatingPlanId.value = planId;
+}
+
+function reconcileBatchAfterRefresh(
+  planId: string,
+  scheduled: Array<{ imageId?: number; promptSlot?: number }>,
+  scheduleFailedCount: number,
+) {
+  const batch = batchDonePending.value;
+  if (!batch || batch.planId !== planId || !scheduled.length) return;
+
+  let failCount = scheduleFailedCount;
+  let stillGenerating = 0;
+  for (const item of scheduled) {
+    const out = outputs.value.find((o) => o.imageId === item.imageId);
+    if (!out || out.state === "生成中") {
+      stillGenerating += 1;
+      continue;
+    }
+    if (out.state === "生成失败") failCount += 1;
+  }
+
+  if (stillGenerating > 0) {
+    batch.remaining = stillGenerating;
+    batch.failedCount = failCount;
+    return;
+  }
+
+  const batchTotal = batch.total;
+  batchDonePending.value = null;
+  if (failCount > 0) {
+    window.$message.warning($t("workbench.aso.generateAllDoneWithErrors"));
+  } else {
+    window.$message.success($t("workbench.aso.generateAllDone", { count: batchTotal }));
+  }
+}
+
+function finishBatchPollItem(
+  prev: { planId: string },
+  failed: boolean,
+): { kind: "single-ok" | "single-fail" | "batch-pending" | "batch-done-ok" | "batch-done-errors"; batchTotal?: number } {
+  const batch = batchDonePending.value;
+  if (!batch || batch.planId !== prev.planId) {
+    return { kind: failed ? "single-fail" : "single-ok" };
+  }
+  batch.remaining -= 1;
+  if (failed) batch.failedCount += 1;
+  if (batch.remaining > 0) return { kind: "batch-pending" };
+  const batchTotal = batch.total;
+  batchDonePending.value = null;
+  if (batch.failedCount > 0) return { kind: "batch-done-errors", batchTotal };
+  return { kind: "batch-done-ok", batchTotal };
+}
 const inspectorVisible = useLocalStorage("aso_inspector_visible", true);
 
 const nodePositions = ref<AsoNodePositions>({ ...DEFAULT_ASO_NODE_POSITIONS });
@@ -199,7 +328,7 @@ function pruneNodePositions() {
     ASO_NODE_IDS.input,
     ASO_NODE_IDS.materials,
     ...plans.value.map((p) => planNodeId(p.id)),
-    ...outputs.value.map((o) => outputNodeId(o.imageId)),
+    ...plans.value.map((p) => planOutputsNodeId(p.id)),
   ]);
   const next: AsoNodePositions = {};
   for (const [key, pos] of Object.entries(nodePositions.value)) {
@@ -230,9 +359,10 @@ onNodeDragStop(async ({ nodes: draggedNodes }) => {
   scheduleSavePositions();
 });
 
-async function enrichOutputs(raw: any[]) {
-  if (!raw.length || !project.value?.id) return raw;
-  const { data } = await pollingOutputs(Number(project.value.id), raw.map((o) => o.imageId));
+async function enrichOutputs(raw: any[], projectId: number, requestId: number) {
+  if (!raw.length) return raw;
+  const { data } = await pollingOutputs(projectId, raw.map((o) => o.imageId));
+  if (requestId !== loadRequestId) return null;
   return raw.map((o) => {
     const polled = data?.find((d: any) => d.imageId === o.imageId);
     return polled ? { ...o, ...polled } : o;
@@ -252,19 +382,6 @@ function scheduleRemeasure() {
   }, 150);
 }
 
-function positionOutputNearPlan(planId: string, imageId: number) {
-  const pid = planNodeId(planId);
-  const oid = outputNodeId(imageId);
-  if (nodePositions.value[oid]) return;
-  const planPos = nodePositions.value[pid] ?? { x: 420, y: 0 };
-  const siblings = outputs.value.filter((o) => resolveOutputPlanId(o, plans.value) === planId);
-  const idx = siblings.findIndex((o) => o.imageId === imageId);
-  nodePositions.value[oid] = {
-    x: planPos.x + 420,
-    y: planPos.y + Math.max(0, idx) * 300,
-  };
-}
-
 function applyPollResults(items: any[]) {
   for (const item of items) {
     const idx = outputs.value.findIndex((o) => o.imageId === item.imageId);
@@ -272,15 +389,21 @@ function applyPollResults(items: any[]) {
     const prev = outputs.value[idx];
     outputs.value[idx] = { ...prev, ...item };
     if (prev.state !== "生成中") continue;
+
+    clearOutputGenerating(prev);
+
     if (item.state === "已完成") {
-      window.$message.success($t("workbench.aso.imageDone"));
-      if (generatingPlanId.value && prev.planId === generatingPlanId.value) {
-        generatingPlanId.value = null;
+      const { kind, batchTotal } = finishBatchPollItem(prev, false);
+      if (kind === "single-ok") window.$message.success($t("workbench.aso.imageDone"));
+      else if (kind === "batch-done-ok") {
+        window.$message.success($t("workbench.aso.generateAllDone", { count: batchTotal ?? 1 }));
       }
     } else if (item.state === "生成失败") {
-      window.$message.error(item.errorReason || $t("workbench.aso.generateFailed"));
-      if (generatingPlanId.value && prev.planId === generatingPlanId.value) {
-        generatingPlanId.value = null;
+      const { kind } = finishBatchPollItem(prev, true);
+      if (kind === "single-fail") {
+        window.$message.error(item.errorReason || $t("workbench.aso.generateFailed"));
+      } else if (kind === "batch-done-errors") {
+        window.$message.warning($t("workbench.aso.generateAllDoneWithErrors"));
       }
     }
   }
@@ -302,21 +425,28 @@ function scheduleOutputPoll() {
 
 async function refreshOutputsPending() {
   if (!project.value?.id) return;
+  const projectId = Number(project.value.id);
+  const requestId = loadRequestId;
   const pending = outputs.value.filter((o) => o.state === "生成中").map((o) => o.imageId);
   if (!pending.length) {
     stopOutputPoll();
-    if (generatingPlanId.value) generatingPlanId.value = null;
+    if (generatingSlots.value.size === 0) {
+      generatingPlanId.value = null;
+    }
     return;
   }
   try {
-    const { data } = await pollingOutputs(Number(project.value.id), pending);
+    const { data } = await pollingOutputs(projectId, pending);
+    if (requestId !== loadRequestId || Number(project.value?.id ?? 0) !== projectId) return;
     if (Array.isArray(data) && data.length) applyPollResults(data);
   } catch {
     return;
   }
   if (!outputs.value.some((o) => o.state === "生成中")) {
     stopOutputPoll();
-    if (generatingPlanId.value) generatingPlanId.value = null;
+    if (generatingSlots.value.size === 0) {
+      generatingPlanId.value = null;
+    }
   }
   scheduleRemeasure();
 }
@@ -325,40 +455,102 @@ watch(outputs, scheduleOutputPoll, { deep: true });
 watch(() => plans.value.length, scheduleRemeasure);
 watch(() => outputs.value.length, scheduleRemeasure);
 
-async function generatePlanImage(planId: string, presetId?: string) {
-  if (!project.value?.id || generatingPlanId.value) return;
-  const projectId = Number(project.value.id);
+async function generatePlanImage(
+  planId: string,
+  presetId?: string,
+  options?: { promptSlot?: number; generateAll?: boolean },
+) {
+  if (!project.value?.id) return;
+  const keys = resolveGenKeys(planId, options);
+  if (keys.some((k) => generatingSlots.value.has(k))) return;
+
+  const next = new Set(generatingSlots.value);
+  keys.forEach((k) => next.add(k));
+  generatingSlots.value = next;
   generatingPlanId.value = planId;
+
   try {
     const { data } = await generateAsoImage(
-      projectId,
+      Number(project.value.id),
       planId,
       presetId ?? outputSizePreset.value,
       referencedAssetIds.value,
+      options,
     );
+    const scheduled: Array<{ imageId?: number; promptSlot?: number }> = Array.isArray(data?.outputs)
+      ? data.outputs
+      : [{ promptSlot: options?.promptSlot }];
+    syncGeneratingSlotsFromScheduled(planId, scheduled);
+
+    const failed = Array.isArray(data?.failed) ? data.failed : [];
+    if (failed.length) {
+      window.$message.warning(
+        $t("workbench.aso.generatePartialFailed", { ok: scheduled.length, failed: failed.length }),
+      );
+    }
+
+    const scheduledCount = scheduled.length;
+    if (options?.generateAll && scheduledCount > 1) {
+      batchDonePending.value = {
+        planId,
+        remaining: scheduledCount,
+        total: scheduledCount,
+        failedCount: failed.length,
+      };
+      window.$message.success($t("workbench.aso.generateAllStarted", { count: scheduledCount }));
+    }
+
     await refreshOutputsFromServer();
-    positionOutputNearPlan(planId, data.imageId);
+    if (options?.generateAll && scheduledCount > 1) {
+      reconcileBatchAfterRefresh(planId, scheduled, failed.length);
+    }
+    await remeasureFlowNodes();
+    await layoutGraph(false, { fitView: false });
     scheduleRemeasure();
   } catch (e: any) {
     const msg = e?.message || $t("workbench.aso.generateFailed");
     window.$message.error(e?.code === 409 ? $t("workbench.aso.duplicateGenerating") : msg);
-    generatingPlanId.value = null;
+    const rollback = new Set(generatingSlots.value);
+    keys.forEach((k) => rollback.delete(k));
+    generatingSlots.value = rollback;
+    if (!rollback.size) generatingPlanId.value = null;
   }
 }
 
-async function deleteOutputItem(imageId: number) {
+async function deleteOutputItem(imageId: number, options?: { silent?: boolean }) {
   if (!project.value?.id) return;
   try {
     await deleteOutput(Number(project.value.id), imageId);
     outputs.value = outputs.value.filter((o) => o.imageId !== imageId);
     if (selectedOutputId.value === imageId) selectedOutputId.value = null;
-    delete nodePositions.value[outputNodeId(imageId)];
     pruneNodePositions();
     scheduleSavePositions();
+    await remeasureFlowNodes();
     scheduleRemeasure();
-    window.$message.success($t("workbench.aso.outputDeleted"));
+    if (!options?.silent) {
+      window.$message.success($t("workbench.aso.outputDeleted"));
+    }
   } catch (e: any) {
     window.$message.error(e?.message || $t("workbench.aso.deleteFailed"));
+    throw e;
+  }
+}
+
+function isOutputSlotBusy(planId: string, promptSlot?: number) {
+  if (isSlotGenerating(planId, promptSlot)) return true;
+  return outputs.value.some((o) => {
+    if (resolveOutputPlanId(o, plans.value) !== planId) return false;
+    if (promptSlot != null) return o.promptSlot === promptSlot && o.state === "生成中";
+    return o.promptSlot == null && o.state === "生成中";
+  });
+}
+
+async function waitForSlotGenerationEnd(planId: string, promptSlot?: number, timeoutMs = 360_000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (!isOutputSlotBusy(planId, promptSlot)) return;
+    await refreshOutputsPending();
+    await new Promise((r) => setTimeout(r, 1500));
   }
 }
 
@@ -368,13 +560,41 @@ async function regenerateOutput(output: any) {
     window.$message.error($t("workbench.aso.outputPlanMissing"));
     return;
   }
-  if (generatingPlanId.value) return;
+  if (isOutputSlotBusy(planId, output.promptSlot)) return;
   try {
-    await deleteOutputItem(output.imageId);
-    await generatePlanImage(planId, output.presetId);
+    await deleteOutputItem(output.imageId, { silent: true });
+    await generatePlanImage(
+      planId,
+      output.presetId,
+      output.promptSlot != null ? { promptSlot: output.promptSlot } : undefined,
+    );
   } catch {
     /* errors surfaced in helpers */
   }
+}
+
+async function onRetryOutput(output: any) {
+  if (retryingOutputId.value != null) return;
+  retryingOutputId.value = output.imageId;
+  try {
+    await regenerateOutput(output);
+  } finally {
+    retryingOutputId.value = null;
+  }
+}
+
+function openOutputEdit(output: any) {
+  if (!output?.filePath || output.state !== "已完成") return;
+  outputEditTarget.value = output;
+  outputEditVisible.value = true;
+  selectedOutputId.value = output.imageId;
+  inspectorVisible.value = true;
+}
+
+async function onOutputEditApplied(payload: { imageId: number }) {
+  await refreshOutputsFromServer();
+  selectedOutputId.value = payload.imageId;
+  scheduleRemeasure();
 }
 
 function applySavedLayout(saved: Record<string, { x: number; y: number }> | undefined): boolean {
@@ -382,17 +602,6 @@ function applySavedLayout(saved: Record<string, { x: number; y: number }> | unde
   const { asoPlans: _asoPlans, asoOutput: _asoOutput, ...rest } = saved as Record<string, { x: number; y: number }>;
   nodePositions.value = { ...DEFAULT_ASO_NODE_POSITIONS, ...rest };
   return true;
-}
-
-function needsPerItemLayout(): boolean {
-  if (plans.value.some((p) => !nodePositions.value[planNodeId(p.id)])) return true;
-  if (outputs.value.some((o) => !nodePositions.value[outputNodeId(o.imageId)])) return true;
-  const planPosKeys = plans.value
-    .map((p) => nodePositions.value[planNodeId(p.id)])
-    .filter(Boolean)
-    .map((p) => `${p!.x},${p!.y}`);
-  if (planPosKeys.length >= 2 && new Set(planPosKeys).size < planPosKeys.length) return true;
-  return false;
 }
 
 function applyWorkspaceData(
@@ -403,7 +612,9 @@ function applyWorkspaceData(
     selectedPlanId.value = workspace?.selectedPlanId ?? null;
     referencedAssetIds.value = workspace?.referencedAssetIds ?? [];
     outputSizePreset.value = workspace?.outputSizePreset ?? "general_vertical_1080x1920";
-    if (workspace?.planCount) planCount.value = workspace.planCount;
+    const savedCount = workspace?.planCount ?? 1;
+    planCount.value = Math.min(Math.max(savedCount, 1), 10);
+    imagePromptCount.value = Math.min(Math.max(workspace?.imagePromptCount ?? 0, 0), 20);
   }
   if (options.plans) {
     const serverPlans = workspace?.plans ?? [];
@@ -429,17 +640,20 @@ async function loadWorkspace(options: LoadWorkspaceOptions = {}): Promise<boolea
   };
   if (!project.value?.id) return false;
   const requestId = ++loadRequestId;
-  const { data } = await getWorkspace(Number(project.value.id));
+  const projectId = Number(project.value.id);
+  const { data } = await getWorkspace(projectId);
   if (requestId !== loadRequestId) return false;
 
-  let hadSavedLayout = false;
   if (opts.outputs) {
-    outputs.value = await enrichOutputs(data.workspace?.outputs ?? []);
+    const enriched = await enrichOutputs(data.workspace?.outputs ?? [], projectId, requestId);
     if (requestId !== loadRequestId) return false;
+    if (enriched == null) return false;
+    outputs.value = enriched;
   } else {
     return applyWorkspaceData(data.workspace, opts);
   }
 
+  if (requestId !== loadRequestId) return false;
   return applyWorkspaceData(data.workspace, { ...opts, outputs: false });
 }
 
@@ -457,14 +671,24 @@ async function onPlansGenerated(payload: { plans: any[]; workspace?: any }) {
   }
   if (payload.workspace) {
     selectedPlanId.value = payload.workspace.selectedPlanId ?? serverPlans[0]?.id ?? null;
-    if (payload.workspace.planCount) planCount.value = payload.workspace.planCount;
-    outputs.value = await enrichOutputs(payload.workspace.outputs ?? outputs.value);
+    planCount.value = Math.min(Math.max(payload.workspace.planCount ?? 1, 1), 10);
+    imagePromptCount.value = Math.min(Math.max(payload.workspace.imagePromptCount ?? 0, 0), 20);
+    if (project.value?.id) {
+      const requestId = ++loadRequestId;
+      const enriched = await enrichOutputs(
+        payload.workspace.outputs ?? outputs.value,
+        Number(project.value.id),
+        requestId,
+      );
+      if (enriched != null) outputs.value = enriched;
+    }
     outputSizePreset.value = payload.workspace.outputSizePreset ?? outputSizePreset.value;
     referencedAssetIds.value = payload.workspace.referencedAssetIds ?? referencedAssetIds.value;
     applySavedLayout(payload.workspace.nodePositions);
   }
+  pruneNodePositions();
   await remeasureFlowNodes();
-  await layoutGraph(false);
+  await layoutGraph(false, { fitView: false });
 }
 
 function onSelectPlan(planId: string) {
@@ -472,15 +696,17 @@ function onSelectPlan(planId: string) {
   selectedOutputId.value = null;
 }
 
-function onPlanUpdated(payload: { id: string; title: string; copy: string; edited?: boolean }) {
+function onPlanUpdated(payload: { id: string; title: string; copy: string; imagePrompts?: any[]; edited?: boolean }) {
   const idx = plans.value.findIndex((p) => p.id === payload.id);
   if (idx === -1) return;
   plans.value[idx] = {
     ...plans.value[idx],
     title: payload.title,
     copy: payload.copy,
+    imagePrompts: payload.imagePrompts ?? plans.value[idx].imagePrompts,
     edited: payload.edited ?? true,
   };
+  scheduleRemeasure();
 }
 
 provide(ASO_WORKBENCH_KEY, {
@@ -491,19 +717,26 @@ provide(ASO_WORKBENCH_KEY, {
   selectedOutputId,
   outputSizePreset,
   planCount,
+  imagePromptCount,
   generatingPlanId,
+  generatingSlots,
   loadWorkspace,
   refreshOutputsFromServer,
   onPlansGenerated,
   onSelectPlan,
   onPlanUpdated,
   generatePlanImage,
+  isSlotGenerating,
   deleteOutputItem,
   regenerateOutput,
+  onEditOutput: openOutputEdit,
+  waitForSlotGenerationEnd,
   remeasureFlowNodes,
+  layoutGraphIncremental: () => layoutGraph(false, { fitView: false }),
 });
 
-async function layoutGraph(relayoutAll = false) {
+async function layoutGraph(relayoutAll = false, options: { fitView?: boolean } = {}) {
+  const shouldFitView = options.fitView ?? relayoutAll;
   if (relayoutAll) {
     const keep: AsoNodePositions = {};
     for (const id of [ASO_NODE_IDS.input, ASO_NODE_IDS.materials]) {
@@ -558,7 +791,7 @@ async function layoutGraph(relayoutAll = false) {
   }
 
   let planY = 0;
-  for (const plan of plans.value) {
+  for (const plan of plans.value.filter((p) => p?.id)) {
     const pid = planNodeId(plan.id);
     const planNode = oldData.nodes.find((n) => n.id === pid);
     const planDim = dims.get(pid) ?? { w: 340, h: 220 };
@@ -574,30 +807,28 @@ async function layoutGraph(relayoutAll = false) {
     }
 
     const planOutputs = outputs.value.filter((o) => resolveOutputPlanId(o, plans.value) === plan.id);
-    const planYBase = planNode.position.y;
-    let outY = planYBase;
-    const outX = planNode.position.x + planDim.w + planOutGap;
-    for (const out of planOutputs) {
-      const oid = outputNodeId(out.imageId);
-      const outNode = oldData.nodes.find((n) => n.id === oid);
-      const outDim = dims.get(oid) ?? { w: 280, h: 260 };
-      if (!outNode) continue;
-      const savedOut = !relayoutAll ? nodePositions.value[oid] : undefined;
+    const planPos = { x: planNode.position.x, y: planNode.position.y };
+    const outGid = planOutputsNodeId(plan.id);
+    const outGroupNode = oldData.nodes.find((n) => n.id === outGid);
+    if (outGroupNode) {
+      const savedOut = !relayoutAll ? nodePositions.value[outGid] : undefined;
       if (savedOut) {
-        outNode.position.x = savedOut.x;
-        outNode.position.y = savedOut.y;
+        outGroupNode.position.x = savedOut.x;
+        outGroupNode.position.y = savedOut.y;
       } else {
-        outNode.position.x = outX;
-        outNode.position.y = outY;
-        outY += outDim.h + 40;
+        const pos = layoutPlanOutputsNodePosition(planPos, planDim, planOutGap);
+        outGroupNode.position.x = pos.x;
+        outGroupNode.position.y = pos.y;
       }
     }
 
+    const planYBase = planNode.position.y;
+    const outGroupHeight = estimatePlanOutputsNodeHeight(Math.max(planOutputs.length, 1));
+    const blockHeight = Math.max(planDim.h, outGroupHeight);
     if (!savedPlan) {
-      const blockHeight = Math.max(planDim.h, outY - planYBase);
       planY = planYBase + blockHeight + gap;
     } else {
-      planY = Math.max(planY, planYBase + planDim.h + gap);
+      planY = Math.max(planY, planYBase + blockHeight + gap);
     }
   }
 
@@ -607,7 +838,9 @@ async function layoutGraph(relayoutAll = false) {
     nodePositions.value[node.id] = { x: node.position.x, y: node.position.y };
   }
   scheduleSavePositions();
-  await fitView({ padding: 0.2, duration: 200 });
+  if (shouldFitView) {
+    await fitView({ padding: 0.2, duration: 200 });
+  }
 }
 
 onMounted(async () => {
@@ -615,7 +848,7 @@ onMounted(async () => {
   await nextTick();
   scheduleOutputPoll();
   if (hadSaved) {
-    if (needsPerItemLayout()) await layoutGraph(false);
+    await layoutGraph(false);
     await remeasureFlowNodes();
     await fitView({ padding: 0.2, duration: 200 });
   } else {
@@ -629,12 +862,17 @@ watch(
     if (!id || id === prevId) return;
     stopOutputPoll();
     generatingPlanId.value = null;
+    generatingSlots.value = new Set();
+    batchDonePending.value = null;
     selectedPlanId.value = null;
     selectedOutputId.value = null;
+    outputEditVisible.value = false;
+    outputEditTarget.value = null;
+    loadRequestId++;
     const hadSaved = await loadWorkspace();
     scheduleOutputPoll();
     if (hadSaved) {
-      if (needsPerItemLayout()) await layoutGraph(false);
+      await layoutGraph(false);
       await remeasureFlowNodes();
       await fitView({ padding: 0.2, duration: 200 });
     } else {

@@ -29,7 +29,7 @@ const refreshOutputsFromServer = ctx.refreshOutputsFromServer;
 
 <style scoped lang="scss">
 .asoFlowNode {
-  width: 340px;
+  width: 460px;
   user-select: text;
   cursor: default;
 
@@ -53,12 +53,8 @@ const refreshOutputsFromServer = ctx.refreshOutputsFromServer;
 
   .content {
     margin-top: 10px;
-    max-height: 520px;
+    max-height: min(72vh, 900px);
     overflow: auto;
-  }
-
-  :deep(.materialGrid .grid) {
-    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -88,10 +88,22 @@ async function onGenerateImage(plan: any) {
   if (!project.value?.id || generatingPlanId.value) return;
   const projectId = Number(project.value.id);
   generatingPlanId.value = plan.id;
+  const hasMatrix = (plan.imagePrompts?.length ?? 0) > 0;
   try {
-    const { data } = await generateAsoImage(projectId, plan.id, props.presetId, props.referencedAssetIds);
-    emit("generated", { imageId: data.imageId, planId: plan.id, done: false });
-    pollUntilDone(projectId, data.imageId, plan.id);
+    const { data } = await generateAsoImage(
+      projectId,
+      plan.id,
+      props.presetId,
+      props.referencedAssetIds,
+      hasMatrix ? { generateAll: true } : undefined,
+    );
+    const outputs = Array.isArray(data?.outputs) ? data.outputs : [data];
+    for (const out of outputs) {
+      emit("generated", { imageId: out.imageId, planId: plan.id, done: false });
+    }
+    for (const out of outputs) {
+      pollUntilDone(projectId, out.imageId, plan.id);
+    }
   } catch (e: any) {
     const msg = e?.message || $t("workbench.aso.generateFailed");
     window.$message.error(e?.code === 409 ? $t("workbench.aso.duplicateGenerating") : msg);

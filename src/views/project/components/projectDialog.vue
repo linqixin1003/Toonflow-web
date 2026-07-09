@@ -157,7 +157,11 @@
               </div>
               <div class="mdFileLocation">
                 <label class="fieldLabel">{{ $t("workbench.project.dialog.mdFile") }}</label>
-                <t-input v-model="visualManualForm.stylePath" :disabled="!!editingVisualManual" />
+                <t-input
+                  v-model="visualManualForm.stylePath"
+                  :disabled="!!editingVisualManual"
+                  :placeholder="$t('workbench.project.dialog.visualManualFilePh')"
+                  @input="visualManualStylePathTouched = true" />
               </div>
               <div class="coverField">
                 <label class="fieldLabel">{{ $t("workbench.project.dialog.visualManualCover") }}</label>
@@ -381,6 +385,25 @@ const DEFAULT_TAB_DATA: () => Data[] = () => [
   { label: "技法-分镜表设计", value: "director_storyboard_table_style", data: "" },
 ];
 
+const VISUAL_MANUAL_REQUIRED_TABS = new Set(["README", "prefix"]);
+
+function sanitizeStylePath(name: string): string {
+  const s = name
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_")
+    .replace(/[^a-z0-9_]/g, "")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+  return s || "visual_manual";
+}
+
+function resolveVisualManualStylePath(): string {
+  const manual = visualManualForm.value.stylePath.trim();
+  if (manual) return manual;
+  return sanitizeStylePath(visualManualForm.value.name);
+}
+
 const isEdit = computed(() => !!props.projectData);
 
 // ===== 常量 =====
@@ -546,6 +569,15 @@ const visualManualLoading = ref(false);
 const visualManualDialogVisible = ref(false);
 const editingVisualManual = ref<VisualManualItem | null>(null);
 const visualManualForm = ref({ name: "", images: [] as string[], stylePath: "" });
+const visualManualStylePathTouched = ref(false);
+
+watch(
+  () => visualManualForm.value.name,
+  (name) => {
+    if (editingVisualManual.value || visualManualStylePathTouched.value) return;
+    visualManualForm.value.stylePath = sanitizeStylePath(name);
+  },
+);
 const visualManualCoverInputRef = ref<HTMLInputElement>();
 const visualManualTabValue = ref<TabValue>("README");
 const visualManualTabData = ref<Data[]>(DEFAULT_TAB_DATA());
@@ -572,6 +604,7 @@ function fetchVisualManuals() {
 
 function openVisualManualDialog(item?: VisualManualItem) {
   editingVisualManual.value = item ?? null;
+  visualManualStylePathTouched.value = false;
   if (item) {
     visualManualForm.value.name = item.name;
     visualManualForm.value.stylePath = item.stylePath;
@@ -592,6 +625,7 @@ function openVisualManualDialog(item?: VisualManualItem) {
 function resetVisualManualDialog() {
   visualManualDialogVisible.value = false;
   editingVisualManual.value = null;
+  visualManualStylePathTouched.value = false;
   visualManualForm.value = { name: "", images: [], stylePath: "" };
   visualManualTabData.value = DEFAULT_TAB_DATA();
   visualManualTabValue.value = "README";
@@ -627,23 +661,34 @@ async function handleVisualManualSubmit() {
     window.$message.warning($t("workbench.project.msg.enterVisualManualImage"));
     return;
   }
-  const emptyTab = visualManualTabData.value.find((tab) => !tab.data.trim());
+  const stylePath = resolveVisualManualStylePath();
+  if (!stylePath) {
+    window.$message.warning($t("workbench.project.msg.enterVisualManualFile"));
+    return;
+  }
+  const emptyTab = visualManualTabData.value.find(
+    (tab) => VISUAL_MANUAL_REQUIRED_TABS.has(tab.value) && !tab.data.trim(),
+  );
   if (emptyTab) return window.$message.warning(`「${emptyTab.label}」${$t("workbench.project.msg.enterVisualManualTabData")}`);
+  const dataToSave = visualManualTabData.value.map((tab) => ({
+    ...tab,
+    data: tab.data.trim() || "无",
+  }));
   try {
     loading.value = true;
     if (editingVisualManual.value) {
       await axios.post("/project/editVisualManual", {
         name: visualManualForm.value.name,
         images: visualManualForm.value.images,
-        data: visualManualTabData.value,
+        data: dataToSave,
         stylePath: visualManualForm.value.stylePath,
       });
     } else {
       await axios.post("/project/addVisualManual", {
         name: visualManualForm.value.name,
         images: visualManualForm.value.images,
-        data: visualManualTabData.value,
-        stylePath: visualManualForm.value.stylePath,
+        data: dataToSave,
+        stylePath,
       });
     }
 

@@ -7,16 +7,22 @@ import { TDesignResolver } from "@tdesign-vue-next/auto-import-resolver";
 import { viteSingleFile } from "vite-plugin-singlefile";
 import postcsspxtoviewport from "postcss-px-to-viewport";
 
+const useSingleFile = process.env.VITE_SINGLE_FILE === "1";
+
 export default defineConfig({
   base: "./",
-  build: {
-    assetsInlineLimit: Infinity,
-    rollupOptions: {
-      output: {
-        inlineDynamicImports: true,
+  build: useSingleFile
+    ? {
+        assetsInlineLimit: Infinity,
+        rollupOptions: {
+          output: {
+            inlineDynamicImports: true,
+          },
+        },
+      }
+    : {
+        chunkSizeWarningLimit: 8000,
       },
-    },
-  },
   plugins: [
     vue(),
     AutoImport({
@@ -42,7 +48,7 @@ export default defineConfig({
         }),
       ],
     }),
-    viteSingleFile(),
+    ...(useSingleFile ? [viteSingleFile()] : []),
   ],
   resolve: {
     alias: {

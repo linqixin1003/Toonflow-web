@@ -17,10 +17,46 @@ export function planNodeId(planId: string) {
   return `asoPlan-${planId}`;
 }
 
+export function planOutputsNodeId(planId: string) {
+  return `asoPlanOutputs-${planId}`;
+}
+
 export function outputNodeId(imageId: number) {
   return `asoOutput-${imageId}`;
 }
 
+export const DEFAULT_PLAN_OUTPUTS_NODE_DIM = { w: 400, h: 420 } as const;
+
+export const DEFAULT_OUTPUT_DIM = { w: 280, h: 320 } as const;
+
+export type AsoNodeDim = { w: number; h: number };
+
+export type LayoutPlanOutputOptions = {
+  planOutGap?: number;
+  tileGapX?: number;
+  tileGapY?: number;
+  maxPerRow?: number;
+};
+
+/** Position the grouped outputs node to the right of a plan card. */
+export function layoutPlanOutputsNodePosition(
+  planPos: { x: number; y: number },
+  planDim: AsoNodeDim,
+  planOutGap = 80,
+): { x: number; y: number } {
+  return {
+    x: planPos.x + planDim.w + planOutGap,
+    y: planPos.y,
+  };
+}
+
+export function estimatePlanOutputsNodeHeight(outputCount: number, cardColumnWidth = 188): number {
+  const cardImageH = cardColumnWidth;
+  const cardMetaH = 56;
+  const cardH = cardImageH + cardMetaH + 12;
+  const rows = Math.max(1, Math.ceil(outputCount / 2));
+  return 52 + rows * cardH + (rows - 1) * 14;
+}
 const edgeStyle = {
   stroke: "#334155",
   strokeWidth: 3,
@@ -74,7 +110,7 @@ export function useAsoFlowBuilder(
       },
     ];
 
-    for (const plan of plans.value) {
+    for (const plan of plans.value.filter((p) => p?.id)) {
       const id = planNodeId(plan.id);
       list.push({
         id,
@@ -89,18 +125,16 @@ export function useAsoFlowBuilder(
           },
         },
       });
-    }
 
-    for (const out of outputs.value) {
-      const id = outputNodeId(out.imageId);
+      const outNodeId = planOutputsNodeId(plan.id);
       list.push({
-        id,
-        type: "asoOutputItem",
+        id: outNodeId,
+        type: "asoPlanOutputs",
         dragHandle: ".dragHandle",
-        position: positions[id] ?? { x: 800, y: 0 },
+        position: positions[outNodeId] ?? { x: 900, y: 0 },
         data: {
-          output: out,
-          handleIds: { target: `${id}-target` },
+          planId: plan.id,
+          handleIds: { target: `${outNodeId}-target` },
         },
       });
     }
@@ -122,7 +156,7 @@ export function useAsoFlowBuilder(
       },
     ];
 
-    for (const plan of plans.value) {
+    for (const plan of plans.value.filter((p) => p?.id)) {
       const pid = planNodeId(plan.id);
       list.push({
         id: `${ids.materials}-${pid}`,
@@ -133,24 +167,16 @@ export function useAsoFlowBuilder(
         animated: false,
         style: edgeStyle,
       });
-    }
 
-    for (const out of outputs.value) {
-      const linkedPlanId = resolveOutputPlanId(out, plans.value);
-      if (!linkedPlanId) continue;
-      const pid = planNodeId(linkedPlanId);
-      const oid = outputNodeId(out.imageId);
-      const orphaned = out.planId && out.planId !== linkedPlanId;
+      const outGid = planOutputsNodeId(plan.id);
       list.push({
-        id: `${pid}-${oid}`,
+        id: `${pid}-${outGid}`,
         source: pid,
-        target: oid,
+        target: outGid,
         sourceHandle: `${pid}-source`,
-        targetHandle: `${oid}-target`,
+        targetHandle: `${outGid}-target`,
         animated: false,
-        style: orphaned
-          ? { ...edgeStyle, stroke: "#f59e0b", strokeDasharray: "6 4" }
-          : { ...edgeStyle, stroke: "#2563eb" },
+        style: { ...edgeStyle, stroke: "#2563eb" },
       });
     }
 

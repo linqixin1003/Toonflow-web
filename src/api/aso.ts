@@ -14,11 +14,29 @@ export function getSizePresets() {
   return axios.get("/aso/getSizePresets");
 }
 
-export function generatePlans(projectId: number, inputText: string, planCount: number, assetIds: number[] = []) {
-  return axios.post("/aso/generatePlans", { projectId, inputText, planCount, assetIds });
+export function generatePlans(
+  projectId: number,
+  inputText: string,
+  planCount: number,
+  assetIds: number[] = [],
+  imagePromptCount?: number,
+  appendPlans?: boolean,
+) {
+  return axios.post("/aso/generatePlans", {
+    projectId,
+    inputText,
+    planCount,
+    assetIds,
+    imagePromptCount,
+    appendPlans,
+  });
 }
 
-export function updatePlan(projectId: number, planId: string, data: { title?: string; copy?: string }) {
+export function updatePlan(
+  projectId: number,
+  planId: string,
+  data: { title?: string; copy?: string; imagePrompts?: any[] },
+) {
   return axios.post("/aso/updatePlan", { projectId, planId, ...data });
 }
 
@@ -26,8 +44,8 @@ export function uploadMaterial(projectId: number, base64: string, name?: string,
   return axios.post("/aso/uploadMaterial", { projectId, base64, name, describe });
 }
 
-export function createTextMaterial(projectId: number, name: string, describe: string) {
-  return axios.post("/aso/createTextMaterial", { projectId, name, describe });
+export function createTextMaterial(projectId: number, describe: string, promptSlot: number) {
+  return axios.post("/aso/createTextMaterial", { projectId, describe, promptSlot });
 }
 
 export function listMaterials(projectId: number, type: "aso_material" | "aso_output" = "aso_material") {
@@ -42,8 +60,34 @@ export function deleteOutput(projectId: number, imageId: number) {
   return axios.post("/aso/deleteOutput", { projectId, imageId });
 }
 
-export function generateAsoImage(projectId: number, planId: string, presetId?: string, assetIds?: number[]) {
-  return axios.post("/aso/generateAsoImage", { projectId, planId, presetId, assetIds });
+export function generateAsoImage(
+  projectId: number,
+  planId: string,
+  presetId?: string,
+  assetIds?: number[],
+  options?: { promptSlot?: number; generateAll?: boolean },
+) {
+  return axios.post("/aso/generateAsoImage", {
+    projectId,
+    planId,
+    presetId,
+    assetIds,
+    promptSlot: options?.promptSlot,
+    generateAll: options?.generateAll,
+  });
+}
+
+export function editAsoOutput(body: {
+  projectId: number;
+  imageId: number;
+  prompt: string;
+  model?: string;
+  quality?: "1K" | "2K" | "4K";
+  aspectRatio?: string;
+  assetIds?: number[];
+  apply?: boolean;
+}) {
+  return axios.post("/aso/editAsoOutput", body);
 }
 
 export function pollingOutputs(projectId: number, imageIds: number[]) {
@@ -60,6 +104,9 @@ export async function generatePlansStream(
   planCount: number,
   assetIds: number[] = [],
   onEvent?: (event: string, data: any) => void,
+  imagePromptCount?: number,
+  appendPlans?: boolean,
+  signal?: AbortSignal,
 ): Promise<{ plans: any[]; workspace: any; visionFallback?: boolean }> {
   const { baseUrl } = storeToRefs(settingStore());
   const token = localStorage.getItem("token");
@@ -69,7 +116,8 @@ export async function generatePlansStream(
       "Content-Type": "application/json",
       ...(token ? { Authorization: token } : {}),
     },
-    body: JSON.stringify({ projectId, inputText, planCount, assetIds }),
+    body: JSON.stringify({ projectId, inputText, planCount, assetIds, imagePromptCount, appendPlans }),
+    signal,
   });
 
   if (!res.ok) {
@@ -93,6 +141,10 @@ export async function generatePlansStream(
   let result: { plans: any[]; workspace: any; visionFallback?: boolean } = { plans: [], workspace: null };
 
   while (true) {
+    if (signal?.aborted) {
+      await reader.cancel().catch(() => undefined);
+      throw new DOMException("Aborted", "AbortError");
+    }
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
