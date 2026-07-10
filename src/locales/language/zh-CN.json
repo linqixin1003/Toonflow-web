@@ -901,6 +901,11 @@
       "planOutputs": "该方案成品"
     },
     "uiux": {
+      "rawInputLabel": "原始需求",
+      "rawInputPlaceholder": "简单描述你的需求，例如：做一个健身 App 首页，包含每日运动记录和饮食计划...",
+      "refineInput": "整理为创意输入",
+      "refineSuccess": "需求整理完成，已填入创意输入",
+      "refineFailed": "需求整理失败",
       "optimizePrompt": "优化提示词",
       "optimizeSuccess": "提示词优化成功",
       "optimizeFailed": "提示词优化失败"

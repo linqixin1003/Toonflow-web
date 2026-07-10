@@ -102,6 +102,10 @@ export function optimizePrompt(projectId: number, inputText: string) {
   return axios.post("/uiux/optimizePrompt", { projectId, inputText });
 }
 
+export function refineInput(projectId: number, rawInput: string, assetIds: number[] = []) {
+  return axios.post("/uiux/refineInput", { projectId, rawInput, assetIds });
+}
+
 export async function generatePlansStream(
   projectId: number,
   inputText: string,

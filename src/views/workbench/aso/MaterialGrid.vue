@@ -135,15 +135,8 @@
 </template>
 
 <script setup lang="ts">
-import {
-  listMaterials,
-  uploadMaterial,
-  createTextMaterial,
-  deleteMaterial,
-  saveWorkspace,
-  generateRefVariants,
-  pollingOutputs,
-} from "@/api/aso";
+import * as asoApi from "@/api/aso";
+import * as uiuxApi from "@/api/uiux";
 import projectStore from "@/stores/project";
 import { ASO_WORKBENCH_KEY } from "./asoContext";
 
@@ -152,6 +145,8 @@ const emit = defineEmits<{ "update:referencedAssetIds": [ids: number[]]; changed
 
 const ctx = inject(ASO_WORKBENCH_KEY, null);
 const { project } = storeToRefs(projectStore());
+const isUiuxProject = computed(() => project.value?.projectType === "uiux");
+const api = computed(() => (isUiuxProject.value ? uiuxApi : asoApi));
 const materials = ref<any[]>([]);
 const showTextDialog = ref(false);
 const showVariantDialog = ref(false);
@@ -229,7 +224,7 @@ function scheduleRemeasure() {
 
 async function load() {
   if (!project.value?.id) return;
-  const { data } = await listMaterials(Number(project.value.id));
+  const { data } = await api.value.listMaterials(Number(project.value.id));
   materials.value = data;
   schedulePoll();
   scheduleRemeasure();
@@ -264,7 +259,7 @@ function schedulePoll() {
 
 async function refreshPending(imageIds: number[]) {
   if (!project.value?.id) return;
-  const { data } = await pollingOutputs(Number(project.value.id), imageIds);
+  const { data } = await api.value.pollingOutputs(Number(project.value.id), imageIds);
   if (!data?.length) return;
   for (const item of data) {
     const idx = materials.value.findIndex((m) => m.imageId === item.imageId);
@@ -304,7 +299,7 @@ async function onUpload(fileList: any) {
   try {
     for (const file of toUpload) {
       const base64 = await readFileAsDataUrl(file);
-      await uploadMaterial(projectId, base64, file.name);
+      await api.value.uploadMaterial(projectId, base64, file.name);
       ok++;
     }
     await load();
@@ -333,7 +328,7 @@ async function addText() {
     window.$message.warning($t("workbench.aso.textMaterialContentRequired"));
     return false;
   }
-  await createTextMaterial(Number(project.value.id), textForm.value.describe.trim(), slot);
+  await api.value.createTextMaterial(Number(project.value.id), textForm.value.describe.trim(), slot);
   showTextDialog.value = false;
   textForm.value = { promptSlot: 1, describe: "" };
   await load();
@@ -403,7 +398,7 @@ async function submitVariants() {
   }
   variantLoading.value = true;
   try {
-    await generateRefVariants(
+    await api.value.generateRefVariants(
       Number(project.value.id),
       variantForm.value.sourceAssetId,
       variantForm.value.copy.trim(),
@@ -430,15 +425,15 @@ async function toggleRef(id: number, checked: boolean) {
   if (checked && !ids.includes(id)) ids.push(id);
   if (!checked) ids = ids.filter((x) => x !== id);
   emit("update:referencedAssetIds", ids);
-  if (project.value?.id) await saveWorkspace(Number(project.value.id), { referencedAssetIds: ids });
+  if (project.value?.id) await api.value.saveWorkspace(Number(project.value.id), { referencedAssetIds: ids });
 }
 
 async function remove(assetId: number) {
   if (!project.value?.id) return;
-  await deleteMaterial(Number(project.value.id), assetId);
+  await api.value.deleteMaterial(Number(project.value.id), assetId);
   const ids = props.referencedAssetIds.filter((x) => x !== assetId);
   emit("update:referencedAssetIds", ids);
-  await saveWorkspace(Number(project.value.id), { referencedAssetIds: ids });
+  await api.value.saveWorkspace(Number(project.value.id), { referencedAssetIds: ids });
   await load();
   emit("changed");
 }

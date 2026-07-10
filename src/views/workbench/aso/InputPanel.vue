@@ -1,5 +1,23 @@
 <template>
   <div class="inputPanel">
+    <template v-if="isUiuxProject">
+      <div class="rawInputSection">
+        <div class="rawInputLabel">{{ $t("workbench.uiux.rawInputLabel") }}</div>
+        <t-textarea
+          v-model="rawInput"
+          :autosize="{ minRows: 3, maxRows: 8 }"
+          :placeholder="$t('workbench.uiux.rawInputPlaceholder')" />
+        <t-button
+          variant="outline"
+          :loading="refining"
+          :disabled="!rawInput.trim()"
+          @click="onRefineInput"
+          class="refineBtn">
+          {{ $t("workbench.uiux.refineInput") }}
+        </t-button>
+      </div>
+      <div class="divider" />
+    </template>
     <t-textarea
       v-model="inputText"
       :autosize="{ minRows: 4, maxRows: 10 }"
@@ -91,6 +109,8 @@ const { project } = storeToRefs(projectStore());
 const isUiuxProject = computed(() => project.value?.projectType === "uiux");
 const api = computed(() => (isUiuxProject.value ? uiuxApi : asoApi));
 const inputText = ref("");
+const rawInput = ref("");
+const refining = ref(false);
 const planCount = ctx?.planCount ?? ref(1);
 const imagePromptCount = ctx?.imagePromptCount ?? ref(0);
 const { streaming, streamText, run, abort: abortPlanStream } = useAsoPlanStream(
@@ -171,6 +191,26 @@ async function onCountsChange() {
     planCount: planCount.value,
     imagePromptCount: imagePromptCount.value,
   });
+}
+
+async function onRefineInput() {
+  if (!project.value?.id || !rawInput.value.trim()) return;
+  refining.value = true;
+  try {
+    const { data } = await uiuxApi.refineInput(
+      Number(project.value.id),
+      rawInput.value,
+      props.assetIds ?? [],
+    );
+    if (data?.refinedText) {
+      inputText.value = data.refinedText;
+      window.$message.success($t("workbench.uiux.refineSuccess"));
+    }
+  } catch (e: any) {
+    window.$message.error(e?.message || $t("workbench.uiux.refineFailed"));
+  } finally {
+    refining.value = false;
+  }
 }
 
 async function onOptimizePrompt() {
@@ -373,5 +413,23 @@ async function onGenerate() {
   display: flex;
   gap: 8px;
   margin-top: 4px;
+}
+.rawInputSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rawInputLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--td-text-color-primary);
+}
+.refineBtn {
+  align-self: flex-start;
+}
+.divider {
+  height: 1px;
+  background: var(--td-border-level-1-color);
+  margin: 4px 0;
 }
 </style>
