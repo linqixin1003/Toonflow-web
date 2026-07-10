@@ -23,7 +23,7 @@
 </template>
 
 <script setup lang="ts">
-import { pollingOutputs } from "@/api/aso";
+import { useCreativeApi } from "@/composables/useCreativeApi";
 import projectStore from "@/stores/project";
 import { ASO_WORKBENCH_KEY } from "./asoContext";
 
@@ -32,6 +32,7 @@ const emit = defineEmits<{ select: [imageId: number] }>();
 
 const ctx = inject(ASO_WORKBENCH_KEY, null);
 const { project } = storeToRefs(projectStore());
+const { api } = useCreativeApi();
 
 const display = ref<any[]>([]);
 let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -71,7 +72,7 @@ function schedulePoll() {
 
 async function refreshPending(imageIds: number[]) {
   if (!project.value?.id || !imageIds.length) return;
-  const { data } = await pollingOutputs(Number(project.value.id), imageIds);
+  const { data } = await api.value.pollingOutputs(Number(project.value.id), imageIds);
   let stillPending = false;
   for (const item of data) {
     const idx = display.value.findIndex((o) => o.imageId === item.imageId);

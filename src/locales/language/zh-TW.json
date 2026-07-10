@@ -430,6 +430,7 @@
       "production": "影片製作",
       "assetCenter": "資產中心",
       "aso": "ASO 創作",
+      "uiux": "UI-UX 創作",
       "settings": "設定",
       "jumpGithub": "跳轉Github",
       "feedbackQuestions": "回饋問題"
@@ -449,6 +450,7 @@
         "basedOnNovel": "基於小說原文",
         "basedOnScript": "基於劇本",
         "basedOnAso": "ASO 創作",
+        "basedOnUiux": "UI-UX 創作",
         "projectName": "專案名稱",
         "projectNamePh": "請輸入專案名稱",
         "novelType": "小說類型",
@@ -546,7 +548,8 @@
       "type": {
         "novel": "基於小說原文",
         "script": "基於小說劇本",
-        "aso": "ASO 創作"
+        "aso": "ASO 創作",
+        "uiux": "UI-UX 創作"
       }
     },
     "aso": {
@@ -682,6 +685,31 @@
       "statMaterials": "已選參考素材 {count} 項",
       "statOutputs": "已生成成品 {count} 張",
       "planOutputs": "該方案成品"
+    },
+    "uiux": {
+      "rawInputLabel": "原始需求",
+      "rawInputPlaceholder": "簡單描述你的需求，例如：做一個健身 App 首頁，包含每日運動記錄和飲食計劃...",
+      "refineInput": "整理為創意輸入",
+      "refineSuccess": "需求整理完成，已填入創意輸入",
+      "refineFailed": "需求整理失敗",
+      "optimizePrompt": "優化提示詞",
+      "optimizeSuccess": "提示詞優化成功",
+      "optimizeFailed": "提示詞優化失敗",
+      "title": "UI-UX 創作",
+      "inputPlaceholder": "描述產品功能、目標用戶、核心界面與交互（可用 1. 2. 3. 列界面，自動識別每套出圖數）。",
+      "inputRequired": "請填寫設計需求，或先添加/勾選參考素材",
+      "planCount": "方案數量",
+      "planCountHint": "生成幾套不同設計語言的界面方案（1–10）。",
+      "imagePromptCount": "每套出圖數",
+      "imagePromptCountHint": "每個方案包含幾條單張界面出圖提示詞（可與編號功能一一對應）。設為 0 則僅生成 title+copy。",
+      "generatePlans": "生成設計方案",
+      "imageDone": "UI 界面圖生成完成",
+      "generateAllDone": "{count} 張 UI 界面圖已全部生成",
+      "generateAllDoneWithErrors": "批量出圖已完成，部分界面圖生成失敗",
+      "generateAllStarted": "已提交 {count} 張界面出圖任務",
+      "generatePartialFailed": "已提交 {ok} 張，{failed} 張未能提交（可能正在生成中）",
+      "generateFailed": "生成失敗",
+      "duplicateGenerating": "該界面正在生成中，請稍候"
     },
     "novel": {
       "importText": "匯入原文",

@@ -71,7 +71,7 @@
 
 <script setup lang="ts">
 import { Handle, Position } from "@vue-flow/core";
-import { updatePlan } from "@/api/aso";
+import { useCreativeApi } from "@/composables/useCreativeApi";
 import projectStore from "@/stores/project";
 import { ASO_WORKBENCH_KEY } from "../asoContext";
 import ImagePromptEditDialog from "../components/ImagePromptEditDialog.vue";
@@ -87,6 +87,7 @@ const props = defineProps<{
 
 const ctx = inject(ASO_WORKBENCH_KEY)!;
 const { project } = storeToRefs(projectStore());
+const { api } = useCreativeApi();
 
 const plan = computed(() => props.data.plan);
 const handleIds = computed(() => props.data.handleIds);
@@ -136,7 +137,7 @@ function onSelect() {
 
 async function savePlan() {
   if (!project.value?.id || draftTitle.value === plan.value.title) return;
-  await updatePlan(Number(project.value.id), plan.value.id, {
+  await api.value.updatePlan(Number(project.value.id), plan.value.id, {
     title: draftTitle.value,
     copy: plan.value.copy,
     imagePrompts: plan.value.imagePrompts,

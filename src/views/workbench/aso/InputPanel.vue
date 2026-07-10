@@ -21,18 +21,18 @@
     <t-textarea
       v-model="inputText"
       :autosize="{ minRows: 4, maxRows: 10 }"
-      :placeholder="$t('workbench.aso.inputPlaceholder')" />
+      :placeholder="ct('inputPlaceholder')" />
     <div class="countsRow f ac">
       <div class="countWrap f ac">
-        <span class="countLabel">{{ $t("workbench.aso.planCount") }}</span>
+        <span class="countLabel">{{ ct("planCount") }}</span>
         <t-input-number v-model="planCount" :min="1" :max="10" theme="column" @change="onCountsChange" />
       </div>
       <div class="countWrap f ac">
-        <span class="countLabel">{{ $t("workbench.aso.imagePromptCount") }}</span>
+        <span class="countLabel">{{ ct("imagePromptCount") }}</span>
         <t-input-number v-model="imagePromptCount" :min="0" :max="20" theme="column" @change="onCountsChange" />
       </div>
       <t-button theme="primary" :loading="streaming" @click="onGenerate">
-        {{ $t("workbench.aso.generatePlans") }}
+        {{ ct("generatePlans") }}
       </t-button>
     </div>
     <div v-if="isUiuxProject" class="optimizeRow">
@@ -40,8 +40,8 @@
         {{ $t("workbench.uiux.optimizePrompt") }}
       </t-button>
     </div>
-    <div class="planHint">{{ $t("workbench.aso.planCountHint") }}</div>
-    <div class="planHint">{{ $t("workbench.aso.imagePromptCountHint") }}</div>
+    <div class="planHint">{{ ct("planCountHint") }}</div>
+    <div class="planHint">{{ ct("imagePromptCountHint") }}</div>
     <div v-if="totalPromptCount > 0" class="planHint highlight">
       {{
         $t("workbench.aso.totalPromptsHint", {
@@ -95,8 +95,9 @@
 
 <script setup lang="ts">
 import { useAsoPlanStream } from "@/composables/useAsoPlanStream";
-import * as asoApi from "@/api/aso";
-import * as uiuxApi from "@/api/uiux";
+import { useCreativeI18n } from "@/composables/useCreativeI18n";
+import { useCreativeApi } from "@/composables/useCreativeApi";
+import { useCreativeApi } from "@/composables/useCreativeApi";
 import projectStore from "@/stores/project";
 import { ASO_WORKBENCH_KEY } from "./asoContext";
 import { resolveImagePromptCount } from "@/utils/asoNumberedPoints";
@@ -106,19 +107,17 @@ const emit = defineEmits<{ generated: [payload: { plans: any[]; workspace: any }
 
 const ctx = inject(ASO_WORKBENCH_KEY, null);
 const { project } = storeToRefs(projectStore());
-const isUiuxProject = computed(() => project.value?.projectType === "uiux");
-const api = computed(() => (isUiuxProject.value ? uiuxApi : asoApi));
+const { ct, isUiuxProject } = useCreativeI18n();
+const { api } = useCreativeApi();
 const inputText = ref("");
 const rawInput = ref("");
 const refining = ref(false);
 const planCount = ctx?.planCount ?? ref(1);
 const imagePromptCount = ctx?.imagePromptCount ?? ref(0);
-const { streaming, streamText, run, abort: abortPlanStream } = useAsoPlanStream(
-  computed(() => ({
-    generatePlans: api.value.generatePlans,
-    generatePlansStream: api.value.generatePlansStream,
-  })).value,
-);
+const { streaming, streamText, run, abort: abortPlanStream } = useAsoPlanStream(() => ({
+  generatePlans: api.value.generatePlans,
+  generatePlansStream: api.value.generatePlansStream,
+}));
 const optimizing = ref(false);
 const streamProgress = ref("");
 const showGenModeDialog = ref(false);
@@ -149,6 +148,7 @@ watch(streamText, () => {
 
 onBeforeUnmount(() => {
   if (remeasureTimer) clearTimeout(remeasureTimer);
+  if (rawInputSaveTimer) clearTimeout(rawInputSaveTimer);
   abortPlanStream();
 });
 
@@ -162,6 +162,7 @@ async function loadInputState() {
   if (!project.value?.id) return;
   const { data } = await api.value.getWorkspace(Number(project.value.id));
   inputText.value = data.workspace?.inputText ?? "";
+  rawInput.value = data.workspace?.rawInputText ?? "";
   syncCountsFromWorkspace(data.workspace);
   const savedPromptCount = data.workspace?.imagePromptCount;
   if (
@@ -181,9 +182,20 @@ watch(
     abortPlanStream();
     streamProgress.value = "";
     streamText.value = "";
+    rawInput.value = "";
     void loadInputState();
   },
 );
+
+let rawInputSaveTimer: ReturnType<typeof setTimeout> | null = null;
+watch(rawInput, (val) => {
+  if (!isUiuxProject.value || !project.value?.id) return;
+  if (rawInputSaveTimer) clearTimeout(rawInputSaveTimer);
+  rawInputSaveTimer = setTimeout(() => {
+    rawInputSaveTimer = null;
+    void api.value.saveWorkspace(Number(project.value!.id), { rawInputText: val });
+  }, 600);
+});
 
 async function onCountsChange() {
   if (!project.value?.id) return;
@@ -194,16 +206,17 @@ async function onCountsChange() {
 }
 
 async function onRefineInput() {
-  if (!project.value?.id || !rawInput.value.trim()) return;
+  if (!project.value?.id || !rawInput.value.trim() || refining.value || optimizing.value) return;
   refining.value = true;
   try {
-    const { data } = await uiuxApi.refineInput(
-      Number(project.value.id),
-      rawInput.value,
-      props.assetIds ?? [],
-    );
+    const projectId = Number(project.value.id);
+    const { data } = await api.value.refineInput(projectId, rawInput.value, props.assetIds ?? []);
     if (data?.refinedText) {
       inputText.value = data.refinedText;
+      await api.value.saveWorkspace(projectId, {
+        inputText: inputText.value,
+        rawInputText: rawInput.value,
+      });
       window.$message.success($t("workbench.uiux.refineSuccess"));
     }
   } catch (e: any) {
@@ -214,12 +227,14 @@ async function onRefineInput() {
 }
 
 async function onOptimizePrompt() {
-  if (!project.value?.id || !inputText.value.trim()) return;
+  if (!project.value?.id || !inputText.value.trim() || optimizing.value || refining.value) return;
   optimizing.value = true;
   try {
-    const { data } = await uiuxApi.optimizePrompt(Number(project.value.id), inputText.value);
+    const projectId = Number(project.value.id);
+    const { data } = await api.value.optimizePrompt(projectId, inputText.value);
     if (data?.optimizedText) {
       inputText.value = data.optimizedText;
+      await api.value.saveWorkspace(projectId, { inputText: inputText.value });
       window.$message.success($t("workbench.uiux.optimizeSuccess"));
     }
   } catch (e: any) {
@@ -346,7 +361,7 @@ async function onGenerate() {
   if (!project.value?.id) return;
   const hasAssets = (props.assetIds?.length ?? 0) > 0;
   if (!inputText.value.trim() && !hasAssets) {
-    window.$message.warning($t("workbench.aso.inputRequired"));
+    window.$message.warning(ct("inputRequired"));
     return;
   }
   const requested = planCount.value;

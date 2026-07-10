@@ -88,8 +88,14 @@ const menuList = ref([
   // { type: "divider" },
 ]);
 
-const rightBtnList = ref([
-  { type: "btn", path: "/aso", labelKey: "workbench.menu.aso", icon: "i-pic", asoOnly: true },
+const rightBtnList = computed(() => [
+  {
+    type: "btn",
+    path: "/aso",
+    labelKey: project.value?.projectType === "uiux" ? "workbench.menu.uiux" : "workbench.menu.aso",
+    icon: "i-pic",
+    asoOnly: true,
+  },
   { type: "btn", path: "/novel", labelKey: "workbench.menu.novel", icon: "i-notebook", nodelOnly: true },
   { type: "btn", path: "/scriptAgent", labelKey: "workbench.menu.scriptAgent", icon: "i-color-filter", nodelOnly: true },
   { type: "btn", path: "/script", labelKey: "workbench.menu.scriptManage", icon: "i-document-folder" },
@@ -112,7 +118,8 @@ watch(
 
 function menuVisible(menu: { path?: string; nodelOnly?: boolean; asoOnly?: boolean }) {
   const type = project.value?.projectType;
-  if (type === "aso") {
+  // ASO / UI-UX share the creative workbench at /aso
+  if (type === "aso" || type === "uiux") {
     return menu.asoOnly || menu.path === "/assets";
   }
   if (menu.asoOnly) return false;

@@ -1,6 +1,13 @@
-import { updatePlan } from "@/api/aso";
+import * as asoApi from "@/api/aso";
+import * as uiuxApi from "@/api/uiux";
+import projectStore from "@/stores/project";
 
 export type ImagePromptItem = { slot: number; label?: string; prompt: string };
+
+function resolveUpdatePlan() {
+  const { project } = projectStore();
+  return project?.projectType === "uiux" ? uiuxApi.updatePlan : asoApi.updatePlan;
+}
 
 export async function saveImagePromptEdit(params: {
   projectId: number;
@@ -16,7 +23,7 @@ export async function saveImagePromptEdit(params: {
   const nextPrompts = imagePrompts.map((ip) =>
     ip.slot === slot ? { ...ip, label, prompt } : ip,
   );
-  await updatePlan(projectId, planId, {
+  await resolveUpdatePlan()(projectId, planId, {
     title: planTitle,
     copy: planCopy,
     imagePrompts: nextPrompts,

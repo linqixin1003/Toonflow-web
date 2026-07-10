@@ -645,6 +645,7 @@
       "production": "视频生产",
       "assetCenter": "资产中心",
       "aso": "ASO 创作",
+      "uiux": "UI-UX 创作",
       "settings": "设置",
       "jumpGithub": "跳转Github",
       "feedbackQuestions": "反馈问题"
@@ -908,7 +909,22 @@
       "refineFailed": "需求整理失败",
       "optimizePrompt": "优化提示词",
       "optimizeSuccess": "提示词优化成功",
-      "optimizeFailed": "提示词优化失败"
+      "optimizeFailed": "提示词优化失败",
+      "title": "UI-UX 创作",
+      "inputPlaceholder": "描述产品功能、目标用户、核心界面与交互（可用 1. 2. 3. 列界面，自动识别每套出图数）。",
+      "inputRequired": "请填写设计需求，或先添加/勾选参考素材",
+      "planCount": "方案数量",
+      "planCountHint": "生成几套不同设计语言的界面方案（1–10）。",
+      "imagePromptCount": "每套出图数",
+      "imagePromptCountHint": "每个方案包含几条单张界面出图提示词（可与编号功能一一对应）。设为 0 则仅生成 title+copy。",
+      "generatePlans": "生成设计方案",
+      "imageDone": "UI 界面图生成完成",
+      "generateAllDone": "{count} 张 UI 界面图已全部生成",
+      "generateAllDoneWithErrors": "批量出图已完成，部分界面图生成失败",
+      "generateAllStarted": "已提交 {count} 张界面出图任务",
+      "generatePartialFailed": "已提交 {ok} 张，{failed} 张未能提交（可能正在生成中）",
+      "generateFailed": "生成失败",
+      "duplicateGenerating": "该界面正在生成中，请稍候"
     },
     "novel": {
       "importText": "导入原文",

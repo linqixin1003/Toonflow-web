@@ -114,11 +114,12 @@ import {
 } from "./utils/asoFlowBuilder";
 import * as asoApi from "@/api/aso";
 import * as uiuxApi from "@/api/uiux";
+import { useCreativeI18n } from "@/composables/useCreativeI18n";
 import projectStore from "@/stores/project";
 import settingStore from "@/stores/setting";
 
 const { project } = storeToRefs(projectStore());
-const isUiuxProject = computed(() => project.value?.projectType === "uiux");
+const { ct, isUiuxProject } = useCreativeI18n();
 const api = computed(() => (isUiuxProject.value ? uiuxApi : asoApi));
 const { canvasWheelEvent, otherSetting } = storeToRefs(settingStore());
 
@@ -240,9 +241,9 @@ function reconcileBatchAfterRefresh(
   const batchTotal = batch.total;
   batchDonePending.value = null;
   if (failCount > 0) {
-    window.$message.warning($t("workbench.aso.generateAllDoneWithErrors"));
+    window.$message.warning(ct("generateAllDoneWithErrors"));
   } else {
-    window.$message.success($t("workbench.aso.generateAllDone", { count: batchTotal }));
+    window.$message.success(ct("generateAllDone", { count: batchTotal }));
   }
 }
 
@@ -397,16 +398,16 @@ function applyPollResults(items: any[]) {
 
     if (item.state === "已完成") {
       const { kind, batchTotal } = finishBatchPollItem(prev, false);
-      if (kind === "single-ok") window.$message.success($t("workbench.aso.imageDone"));
+      if (kind === "single-ok") window.$message.success(ct("imageDone"));
       else if (kind === "batch-done-ok") {
-        window.$message.success($t("workbench.aso.generateAllDone", { count: batchTotal ?? 1 }));
+        window.$message.success(ct("generateAllDone", { count: batchTotal ?? 1 }));
       }
     } else if (item.state === "生成失败") {
       const { kind } = finishBatchPollItem(prev, true);
       if (kind === "single-fail") {
-        window.$message.error(item.errorReason || $t("workbench.aso.generateFailed"));
+        window.$message.error(item.errorReason || ct("generateFailed"));
       } else if (kind === "batch-done-errors") {
-        window.$message.warning($t("workbench.aso.generateAllDoneWithErrors"));
+        window.$message.warning(ct("generateAllDoneWithErrors"));
       }
     }
   }
@@ -488,7 +489,7 @@ async function generatePlanImage(
     const failed = Array.isArray(data?.failed) ? data.failed : [];
     if (failed.length) {
       window.$message.warning(
-        $t("workbench.aso.generatePartialFailed", { ok: scheduled.length, failed: failed.length }),
+        ct("generatePartialFailed", { ok: scheduled.length, failed: failed.length }),
       );
     }
 
@@ -500,7 +501,7 @@ async function generatePlanImage(
         total: scheduledCount,
         failedCount: failed.length,
       };
-      window.$message.success($t("workbench.aso.generateAllStarted", { count: scheduledCount }));
+      window.$message.success(ct("generateAllStarted", { count: scheduledCount }));
     }
 
     await refreshOutputsFromServer();
@@ -511,8 +512,8 @@ async function generatePlanImage(
     await layoutGraph(false, { fitView: false });
     scheduleRemeasure();
   } catch (e: any) {
-    const msg = e?.message || $t("workbench.aso.generateFailed");
-    window.$message.error(e?.code === 409 ? $t("workbench.aso.duplicateGenerating") : msg);
+    const msg = e?.message || ct("generateFailed");
+    window.$message.error(e?.code === 409 ? ct("duplicateGenerating") : msg);
     const rollback = new Set(generatingSlots.value);
     keys.forEach((k) => rollback.delete(k));
     generatingSlots.value = rollback;

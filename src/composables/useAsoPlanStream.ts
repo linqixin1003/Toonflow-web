@@ -1,4 +1,6 @@
 import { generatePlans as asoGeneratePlans, generatePlansStream as asoGeneratePlansStream } from "@/api/aso";
+import type { MaybeRefOrGetter } from "vue";
+import { toValue } from "vue";
 
 const STREAM_FALLBACK_ERRORS = /流式连接失败|Failed to fetch|Network Error|network error/i;
 
@@ -7,11 +9,13 @@ type PlanStreamApi = {
   generatePlansStream: typeof asoGeneratePlansStream;
 };
 
-export function useAsoPlanStream(api?: PlanStreamApi) {
-  const { generatePlans, generatePlansStream } = api ?? {
-    generatePlans: asoGeneratePlans,
-    generatePlansStream: asoGeneratePlansStream,
-  };
+const defaultApi: PlanStreamApi = {
+  generatePlans: asoGeneratePlans,
+  generatePlansStream: asoGeneratePlansStream,
+};
+
+export function useAsoPlanStream(apiSource?: MaybeRefOrGetter<PlanStreamApi | undefined>) {
+  const resolveApi = (): PlanStreamApi => toValue(apiSource) ?? defaultApi;
   const streaming = ref(false);
   const streamText = ref("");
   const errorMessage = ref("");
@@ -41,6 +45,7 @@ export function useAsoPlanStream(api?: PlanStreamApi) {
     errorMessage.value = "";
 
     try {
+      const { generatePlans, generatePlansStream } = resolveApi();
       return await generatePlansStream(
         options.projectId,
         options.inputText,
@@ -71,6 +76,7 @@ export function useAsoPlanStream(api?: PlanStreamApi) {
         errorMessage.value = msg;
         throw e;
       }
+      const { generatePlans } = resolveApi();
       const { data } = await generatePlans(
         options.projectId,
         options.inputText,

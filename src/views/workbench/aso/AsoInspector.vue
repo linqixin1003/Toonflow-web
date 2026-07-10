@@ -246,8 +246,7 @@ import PlanOutputGrid from "./components/PlanOutputGrid.vue";
 
 import ImagePromptEditDialog from "./components/ImagePromptEditDialog.vue";
 
-import { updatePlan } from "@/api/aso";
-
+import { useCreativeApi } from "@/composables/useCreativeApi";
 import projectStore from "@/stores/project";
 
 import { usePlanImagePromptEditor } from "./composables/usePlanImagePromptEditor";
@@ -297,6 +296,7 @@ const emit = defineEmits<{
 
 
 const { project } = storeToRefs(projectStore());
+const { api } = useCreativeApi();
 
 const draftTitle = ref("");
 
@@ -401,7 +401,7 @@ async function saveDraftForPlan(planId: string) {
   if (draftTitle.value === plan.title && draftCopy.value === plan.copy) return;
   saving.value = true;
   try {
-    await updatePlan(Number(project.value.id), planId, {
+    await api.value.updatePlan(Number(project.value.id), planId, {
       title: draftTitle.value,
       copy: draftCopy.value,
     });

@@ -550,6 +550,7 @@
       "production": "Video Production",
       "assetCenter": "Asset Center",
       "aso": "ASO Creation",
+      "uiux": "UI-UX Creation",
       "settings": "Settings",
       "jumpGithub": "Jump to Github",
       "feedbackQuestions": "Feedback question"
@@ -607,6 +608,7 @@
         },
         "basedOnScript": "based on script",
         "basedOnAso": "ASO Creation",
+        "basedOnUiux": "UI-UX Creation",
         "mdFile": "visual manual file",
         "directorManual": "Director's Handbook",
         "addDirectorManual": "New director manual",
@@ -666,7 +668,8 @@
       "type": {
         "novel": "Based on the original novel",
         "script": "Based on novel script",
-        "aso": "ASO Creation"
+        "aso": "ASO Creation",
+        "uiux": "UI-UX Creation"
       }
     },
     "aso": {
@@ -802,6 +805,31 @@
       "statMaterials": "Referenced materials: {count}",
       "statOutputs": "Outputs: {count}",
       "planOutputs": "Outputs for this plan"
+    },
+    "uiux": {
+      "rawInputLabel": "Raw requirements",
+      "rawInputPlaceholder": "Describe your needs briefly, e.g. a fitness app home with daily workout tracking and meal plans...",
+      "refineInput": "Refine into creative input",
+      "refineSuccess": "Requirements refined and filled into creative input",
+      "refineFailed": "Failed to refine requirements",
+      "optimizePrompt": "Optimize prompt",
+      "optimizeSuccess": "Prompt optimized",
+      "optimizeFailed": "Failed to optimize prompt",
+      "title": "UI-UX Creation",
+      "inputPlaceholder": "Describe product features, target users, key screens and interactions (use 1. 2. 3. for screens; auto-detects image count).",
+      "inputRequired": "Enter a design brief, or add/select reference materials first",
+      "planCount": "Plan count",
+      "planCountHint": "How many design-language variants to generate (1–10).",
+      "imagePromptCount": "Images per plan",
+      "imagePromptCountHint": "How many single-screen image prompts each plan includes. Set 0 for title+copy only.",
+      "generatePlans": "Generate design plans",
+      "imageDone": "UI screen generated",
+      "generateAllDone": "All {count} UI screens generated",
+      "generateAllDoneWithErrors": "Batch complete; some screens failed to generate",
+      "generateAllStarted": "Submitted {count} UI generation tasks",
+      "generatePartialFailed": "Submitted {ok}; {failed} could not be queued (may already be generating)",
+      "generateFailed": "Generation failed",
+      "duplicateGenerating": "This screen is already generating, please wait"
     },
     "novel": {
       "importText": "Import Text",

@@ -37,7 +37,7 @@
                 </t-select>
               </div>
             </t-form-item>
-            <t-form-item :label="$t('workbench.project.dialog.videoModelData')" v-if="!isAsoProject">
+            <t-form-item :label="$t('workbench.project.dialog.videoModelData')" v-if="!isCreativeProject">
               <div class="ac" style="gap: 5px; width: 100%">
                 <modelSelect v-model="formState.videoModel" type="video" @change="changeFn" :changeConfig="true" />
                 <t-select v-model="formState.mode" class="paramSelect ml-5" :placeholder="$t('workbench.production.editImage.mode')">
@@ -45,7 +45,7 @@
                 </t-select>
               </div>
             </t-form-item>
-            <t-form-item :label="$t('workbench.project.dialog.videoRatio')" v-if="!isAsoProject">
+            <t-form-item :label="$t('workbench.project.dialog.videoRatio')" v-if="!isCreativeProject">
               <t-select v-model="formState.videoRatio" :options="RATIO_OPTIONS" />
             </t-form-item>
             <t-form-item :label="$t('workbench.project.dialog.novelIntro')">
@@ -95,7 +95,7 @@
                 </div>
               </div>
             </t-form-item>
-            <t-form-item v-if="!isAsoProject">
+            <t-form-item v-if="!isCreativeProject">
               <div class="directorManual">
                 <div class="directorManualHeader">
                   <span>{{ $t("workbench.project.dialog.directorManual") }}</span>
@@ -434,7 +434,6 @@ const DEFAULT_FORM: () => ProjectFormData & { id: number; era: string; createTim
 // ===== 表单 =====
 const formState = ref(DEFAULT_FORM());
 
-const isAsoProject = computed(() => formState.value.projectType === "aso");
 const isCreativeProject = computed(() => formState.value.projectType === "aso" || formState.value.projectType === "uiux");
 
 watch(
